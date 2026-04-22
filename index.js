@@ -12,9 +12,9 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-const TOKEN = "MTQ5MjU1ODkyNDM2MzA3MTc4OQ.GtTKDL.NMjwb8EQnml5Y3IFs-xEPibZlssuAw3LFU2ZDs";
-const CLIENT_ID = "1492558924363071789";
-const GUILD_ID = "1296904005917610036";
+const TOKEN = "MTQ5Mzk0ODU2ODA3ODI1ODM0Nw.G7xbrO.OgDdeq5G-nXghec06EckmrHwD1fPOYXqg43aE0";
+const CLIENT_ID = "1493948568078258347";
+const GUILD_ID = "1477683902041690342";
 
 // COMANDO /organizar
 const commands = [
