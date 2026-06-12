@@ -7,36 +7,24 @@ const {
 
 const TOKEN = process.env.TOKEN;
 const GUILD_ID = process.env.GUILD_ID;
-const CANAL_NAO_APAGAR = "1456655599608660047";
-
-if (!TOKEN) {
-  console.log("❌ TOKEN não encontrado nas Variables do Railway.");
-  process.exit(1);
-}
-
-if (!GUILD_ID) {
-  console.log("❌ GUILD_ID não encontrado nas Variables do Railway.");
-  process.exit(1);
-}
 
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
+  intents: [GatewayIntentBits.Guilds]
 });
 
-const cargosNovos = [
+const cargos = [
   "👑・Chefe da Família Souza",
   "💍・Matriarca Souza",
   "🔥・Sub Chefe",
   "🥇・Sub Diretor Souza",
+
   "❤️・Henrique & Aurora",
   "💜・Filhos da Família Souza",
   "🌌・Astral City",
   "☣️・FiveZ",
+
   "📢・Divulgação Liberada",
+
   "💎・Família Souza",
   "🧬・Filho Souza",
   "🌸・Filha Souza",
@@ -46,6 +34,7 @@ const cargosNovos = [
   "⭐・Irmã Souza",
   "⭐・Cunhado Souza",
   "⭐・Cunhada Souza",
+
   "❤️・Casado(a)",
   "💕・Namorando(a)",
   "🎉・Organizador de Eventos",
@@ -71,8 +60,10 @@ const publicos = [
   },
   {
     categoria: "📢 DIVULGAÇÃO",
-    cargoPermitido: "📢・Divulgação Liberada",
-    canais: [["📢・divulgação-liberada", ChannelType.GuildText]]
+    canais: [
+      ["📢・divulgação-liberada", ChannelType.GuildText]
+    ],
+    cargoPermitido: "📢・Divulgação Liberada"
   },
   {
     categoria: "🌌 ASTRAL CITY",
@@ -98,6 +89,13 @@ const publicos = [
       ["🔊・Geral 1", ChannelType.GuildVoice],
       ["🔊・Geral 2", ChannelType.GuildVoice],
       ["🔇・Sem Microfone", ChannelType.GuildVoice]
+    ]
+  },
+  {
+    categoria: "🤖 BOTS",
+    canais: [
+      ["🤖・comandos", ChannelType.GuildText],
+      ["🎮・jogos", ChannelType.GuildText]
     ]
   }
 ];
@@ -150,52 +148,34 @@ const privadas = [
   }
 ];
 
-async function configurarServidor(message) {
-  const guild = await client.guilds.fetch(GUILD_ID);
-  await guild.channels.fetch();
-  await guild.roles.fetch();
-
-  const botMember = await guild.members.fetchMe();
-
-  await message.reply("⚙️ Limpando servidor e criando Família Souza...");
-
-  const canalMantido = guild.channels.cache.get(CANAL_NAO_APAGAR);
-  const categoriaMantidaId = canalMantido?.parentId || null;
-
-  for (const canal of guild.channels.cache.values()) {
-    if (canal.id === CANAL_NAO_APAGAR) continue;
-    if (canal.id === categoriaMantidaId) continue;
-
-    try {
-      await canal.delete("Limpeza Família Souza");
-    } catch (err) {
-      console.log(`❌ Não consegui apagar canal ${canal.name}`);
-    }
+async function configurarServidor() {
+  if (!TOKEN || !GUILD_ID) {
+    console.log("❌ TOKEN ou GUILD_ID não configurado nas Variables.");
+    return;
   }
 
-  await guild.roles.fetch();
+  const guild = await client.guilds.fetch(GUILD_ID).catch(() => null);
 
-  for (const cargo of guild.roles.cache.values()) {
-    if (cargo.name === "@everyone") continue;
-    if (cargo.managed) continue;
-    if (cargo.position >= botMember.roles.highest.position) continue;
-
-    try {
-      await cargo.delete("Limpeza cargos antigos Família Souza");
-    } catch (err) {
-      console.log(`❌ Não consegui apagar cargo ${cargo.name}`);
-    }
+  if (!guild) {
+    console.log("❌ Servidor não encontrado. Confira o GUILD_ID.");
+    return;
   }
 
-  await guild.channels.fetch();
-  await guild.roles.fetch();
+  console.log("⚙️ Configurando Discord da Família Souza...");
 
-  for (const nome of cargosNovos) {
-    if (!guild.roles.cache.find(r => r.name === nome)) {
-      await guild.roles.create({
+  await guild.roles.fetch();
+  await guild.channels.fetch();
+
+  for (const nome of cargos) {
+    let cargo = guild.roles.cache.find(r => r.name === nome);
+
+    if (!cargo) {
+      cargo = await guild.roles.create({
         name: nome,
-        reason: "Cargos novos Família Souza"
+        reason: "Configuração Família Souza"
       });
+
+      console.log(`✅ Cargo criado: ${nome}`);
     }
   }
 
@@ -204,18 +184,22 @@ async function configurarServidor(message) {
   const cargoChefe = guild.roles.cache.find(r => r.name === "👑・Chefe da Família Souza");
 
   for (const bloco of publicos) {
-    let overwrites = [];
+    let categoria = guild.channels.cache.find(
+      c => c.name === bloco.categoria && c.type === ChannelType.GuildCategory
+    );
+
+    const overwrites = [];
 
     if (bloco.cargoPermitido) {
       const cargoPermitido = guild.roles.cache.find(r => r.name === bloco.cargoPermitido);
 
-      overwrites = [
+      overwrites.push(
         {
           id: guild.roles.everyone.id,
-          allow: [PermissionFlagsBits.ViewChannel],
-          deny: [PermissionFlagsBits.SendMessages]
+          deny: [PermissionFlagsBits.SendMessages],
+          allow: [PermissionFlagsBits.ViewChannel]
         }
-      ];
+      );
 
       if (cargoPermitido) {
         overwrites.push({
@@ -240,25 +224,43 @@ async function configurarServidor(message) {
       }
     }
 
-    const categoria = await guild.channels.create({
-      name: bloco.categoria,
-      type: ChannelType.GuildCategory,
-      permissionOverwrites: overwrites
-    });
-
-    for (const [nomeCanal, tipoCanal] of bloco.canais) {
-      await guild.channels.create({
-        name: nomeCanal,
-        type: tipoCanal,
-        parent: categoria.id,
+    if (!categoria) {
+      categoria = await guild.channels.create({
+        name: bloco.categoria,
+        type: ChannelType.GuildCategory,
         permissionOverwrites: overwrites
       });
+
+      console.log(`✅ Categoria criada: ${bloco.categoria}`);
+    }
+
+    for (const [nomeCanal, tipoCanal] of bloco.canais) {
+      let canal = guild.channels.cache.find(c => c.name === nomeCanal);
+
+      if (!canal) {
+        canal = await guild.channels.create({
+          name: nomeCanal,
+          type: tipoCanal,
+          parent: categoria.id,
+          permissionOverwrites: overwrites
+        });
+
+        console.log(`✅ Canal criado: ${nomeCanal}`);
+      }
     }
   }
 
   for (const sala of privadas) {
     const cargoGrupo = guild.roles.cache.find(r => r.name === sala.cargo);
-    if (!cargoGrupo) continue;
+
+    if (!cargoGrupo) {
+      console.log(`❌ Cargo não encontrado: ${sala.cargo}`);
+      continue;
+    }
+
+    let categoria = guild.channels.cache.find(
+      c => c.name === sala.categoria && c.type === ChannelType.GuildCategory
+    );
 
     const permissaoPrivada = [
       {
@@ -290,44 +292,38 @@ async function configurarServidor(message) {
       });
     }
 
-    const categoria = await guild.channels.create({
-      name: sala.categoria,
-      type: ChannelType.GuildCategory,
-      permissionOverwrites: permissaoPrivada
-    });
-
-    for (const [nomeCanal, tipoCanal] of sala.canais) {
-      await guild.channels.create({
-        name: nomeCanal,
-        type: tipoCanal,
-        parent: categoria.id,
+    if (!categoria) {
+      categoria = await guild.channels.create({
+        name: sala.categoria,
+        type: ChannelType.GuildCategory,
         permissionOverwrites: permissaoPrivada
       });
+
+      console.log(`🔒 Categoria privada criada: ${sala.categoria}`);
+    }
+
+    for (const [nomeCanal, tipoCanal] of sala.canais) {
+      let canal = guild.channels.cache.find(c => c.name === nomeCanal);
+
+      if (!canal) {
+        canal = await guild.channels.create({
+          name: nomeCanal,
+          type: tipoCanal,
+          parent: categoria.id,
+          permissionOverwrites: permissaoPrivada
+        });
+
+        console.log(`✅ Canal privado criado: ${nomeCanal}`);
+      }
     }
   }
 
-  await message.channel.send("✅ Família Souza configurada com sucesso!");
+  console.log("✅ Discord da Família Souza configurado com sucesso!");
 }
 
-client.once("ready", () => {
+client.once("ready", async () => {
   console.log(`✅ Bot online como ${client.user.tag}`);
-  console.log("✅ Use !familia para configurar.");
-});
-
-client.on("messageCreate", async (message) => {
-  if (message.author.bot) return;
-  if (message.content !== "!familia") return;
-
-  if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
-    return message.reply("❌ Você precisa ser administrador.");
-  }
-
-  try {
-    await configurarServidor(message);
-  } catch (err) {
-    console.log(err);
-    message.channel.send("❌ Erro: veja se o bot está com Administrador e cargo acima dos outros cargos.");
-  }
+  await configurarServidor();
 });
 
 client.login(TOKEN);
