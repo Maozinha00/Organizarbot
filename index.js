@@ -13,7 +13,7 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-const cargosNovos = [
+const cargos = [
   "👑・Chefe da Família Souza",
   "💍・Matriarca Souza",
   "🔥・Sub Chefe",
@@ -58,9 +58,7 @@ const publicos = [
   {
     categoria: "📢 DIVULGAÇÃO",
     cargoPermitido: "📢・Divulgação Liberada",
-    canais: [
-      ["📢・divulgação-liberada", ChannelType.GuildText]
-    ]
+    canais: [["📢・divulgação-liberada", ChannelType.GuildText]]
   },
   {
     categoria: "🌌 ASTRAL CITY",
@@ -86,6 +84,13 @@ const publicos = [
       ["🔊・Geral 1", ChannelType.GuildVoice],
       ["🔊・Geral 2", ChannelType.GuildVoice],
       ["🔇・Sem Microfone", ChannelType.GuildVoice]
+    ]
+  },
+  {
+    categoria: "🤖 BOTS",
+    canais: [
+      ["🤖・comandos", ChannelType.GuildText],
+      ["🎮・jogos", ChannelType.GuildText]
     ]
   }
 ];
@@ -139,7 +144,14 @@ const privadas = [
 ];
 
 async function configurarServidor() {
-  const guild = await client.guilds.fetch(GUILD_ID);
+  if (!TOKEN || !GUILD_ID) {
+    console.log("❌ TOKEN ou GUILD_ID não configurado nas Variables.");
+    return;
+  }
+
+  const guild = await client.guilds.fetch(GUILD_ID).catch(() => null);
+  if (!guild) return console.log("❌ Servidor não encontrado.");
+
   await guild.channels.fetch();
   await guild.roles.fetch();
 
@@ -148,7 +160,7 @@ async function configurarServidor() {
   console.log("🗑️ Apagando canais antigos...");
 
   const canalProtegido = guild.channels.cache.get(CANAL_NAO_APAGAR);
-  const categoriaProtegidaId = canalProtegido?.parentId;
+  const categoriaProtegidaId = canalProtegido?.parentId || null;
 
   for (const canal of guild.channels.cache.values()) {
     if (canal.id === CANAL_NAO_APAGAR) continue;
@@ -156,7 +168,7 @@ async function configurarServidor() {
 
     try {
       await canal.delete("Limpeza Família Souza");
-      console.log(`✅ Canal apagado: ${canal.name}`);
+      console.log(`🗑️ Canal apagado: ${canal.name}`);
     } catch {
       console.log(`❌ Não apagou canal: ${canal.name}`);
     }
@@ -169,25 +181,25 @@ async function configurarServidor() {
   for (const cargo of guild.roles.cache.values()) {
     if (cargo.name === "@everyone") continue;
     if (cargo.managed) continue;
+    if (cargo.id === botMember.roles.highest.id) continue;
     if (cargo.position >= botMember.roles.highest.position) continue;
 
     try {
-      await cargo.delete("Limpeza cargos antigos Família Souza");
-      console.log(`✅ Cargo apagado: ${cargo.name}`);
+      await cargo.delete("Limpeza cargos Família Souza");
+      console.log(`🗑️ Cargo apagado: ${cargo.name}`);
     } catch {
       console.log(`❌ Não apagou cargo: ${cargo.name}`);
     }
   }
 
-  await guild.channels.fetch();
   await guild.roles.fetch();
 
-  console.log("⚙️ Criando cargos novos...");
+  console.log("✅ Criando cargos novos...");
 
-  for (const nome of cargosNovos) {
+  for (const nome of cargos) {
     await guild.roles.create({
       name: nome,
-      reason: "Cargos novos Família Souza"
+      reason: "Cargos Família Souza"
     });
   }
 
@@ -195,7 +207,7 @@ async function configurarServidor() {
 
   const cargoChefe = guild.roles.cache.find(r => r.name === "👑・Chefe da Família Souza");
 
-  console.log("⚙️ Criando canais públicos...");
+  console.log("✅ Criando canais...");
 
   for (const bloco of publicos) {
     let overwrites = [];
@@ -244,7 +256,7 @@ async function configurarServidor() {
     }
   }
 
-  console.log("🔒 Criando salas privadas...");
+  console.log("🔒 Criando canais privados...");
 
   for (const sala of privadas) {
     const cargoGrupo = guild.roles.cache.find(r => r.name === sala.cargo);
@@ -296,7 +308,7 @@ async function configurarServidor() {
     }
   }
 
-  console.log("✅ Servidor limpo e configurado com sucesso!");
+  console.log("✅ Tudo pronto: antigos apagados e novos criados.");
 }
 
 client.once("ready", async () => {
