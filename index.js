@@ -9,6 +9,16 @@ const TOKEN = process.env.TOKEN;
 const GUILD_ID = process.env.GUILD_ID;
 const CANAL_NAO_APAGAR = "1456655599608660047";
 
+if (!TOKEN) {
+  console.log("❌ TOKEN não encontrado nas Variables do Railway.");
+  process.exit(1);
+}
+
+if (!GUILD_ID) {
+  console.log("❌ GUILD_ID não encontrado nas Variables do Railway.");
+  process.exit(1);
+}
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -147,7 +157,7 @@ async function configurarServidor(message) {
 
   const botMember = await guild.members.fetchMe();
 
-  await message.reply("⚙️ Apagando canais e cargos antigos...");
+  await message.reply("⚙️ Limpando servidor e criando Família Souza...");
 
   const canalMantido = guild.channels.cache.get(CANAL_NAO_APAGAR);
   const categoriaMantidaId = canalMantido?.parentId || null;
@@ -158,8 +168,12 @@ async function configurarServidor(message) {
 
     try {
       await canal.delete("Limpeza Família Souza");
-    } catch {}
+    } catch (err) {
+      console.log(`❌ Não consegui apagar canal ${canal.name}`);
+    }
   }
+
+  await guild.roles.fetch();
 
   for (const cargo of guild.roles.cache.values()) {
     if (cargo.name === "@everyone") continue;
@@ -168,14 +182,20 @@ async function configurarServidor(message) {
 
     try {
       await cargo.delete("Limpeza cargos antigos Família Souza");
-    } catch {}
+    } catch (err) {
+      console.log(`❌ Não consegui apagar cargo ${cargo.name}`);
+    }
   }
 
+  await guild.channels.fetch();
   await guild.roles.fetch();
 
   for (const nome of cargosNovos) {
     if (!guild.roles.cache.find(r => r.name === nome)) {
-      await guild.roles.create({ name: nome });
+      await guild.roles.create({
+        name: nome,
+        reason: "Cargos novos Família Souza"
+      });
     }
   }
 
@@ -194,24 +214,30 @@ async function configurarServidor(message) {
           id: guild.roles.everyone.id,
           allow: [PermissionFlagsBits.ViewChannel],
           deny: [PermissionFlagsBits.SendMessages]
-        },
-        {
+        }
+      ];
+
+      if (cargoPermitido) {
+        overwrites.push({
           id: cargoPermitido.id,
           allow: [
             PermissionFlagsBits.ViewChannel,
             PermissionFlagsBits.SendMessages,
             PermissionFlagsBits.ReadMessageHistory
           ]
-        },
-        {
+        });
+      }
+
+      if (cargoChefe) {
+        overwrites.push({
           id: cargoChefe.id,
           allow: [
             PermissionFlagsBits.ViewChannel,
             PermissionFlagsBits.SendMessages,
             PermissionFlagsBits.ReadMessageHistory
           ]
-        }
-      ];
+        });
+      }
     }
 
     const categoria = await guild.channels.create({
@@ -232,6 +258,7 @@ async function configurarServidor(message) {
 
   for (const sala of privadas) {
     const cargoGrupo = guild.roles.cache.find(r => r.name === sala.cargo);
+    if (!cargoGrupo) continue;
 
     const permissaoPrivada = [
       {
@@ -284,6 +311,7 @@ async function configurarServidor(message) {
 
 client.once("ready", () => {
   console.log(`✅ Bot online como ${client.user.tag}`);
+  console.log("✅ Use !familia para configurar.");
 });
 
 client.on("messageCreate", async (message) => {
@@ -298,7 +326,7 @@ client.on("messageCreate", async (message) => {
     await configurarServidor(message);
   } catch (err) {
     console.log(err);
-    message.channel.send("❌ Deu erro. Veja se o bot tem cargo acima dos outros e permissão de administrador.");
+    message.channel.send("❌ Erro: veja se o bot está com Administrador e cargo acima dos outros cargos.");
   }
 });
 
