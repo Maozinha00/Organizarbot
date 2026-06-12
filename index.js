@@ -1,167 +1,267 @@
-const { 
-  Client, 
-  GatewayIntentBits, 
-  REST, 
-  Routes, 
-  SlashCommandBuilder, 
-  ChannelType,
-  PermissionFlagsBits
-} = require('discord.js');
+const {
+    Client,
+    GatewayIntentBits,
+    PermissionFlagsBits,
+    ChannelType
+} = require("discord.js");
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.MessageContent
+    ]
 });
 
-// ⚠️ USE .ENV (NUNCA DEIXAR TOKEN FIXO)
-const TOKEN = process.env.TOKEN;
-const CLIENT_ID = process.env.CLIENT_ID;
-const GUILD_ID = process.env.GUILD_ID;
+const TOKEN = "COLOQUE_SEU_TOKEN_AQUI";
 
-// 🚨 SEGURANÇA
-if (!TOKEN || !CLIENT_ID || !GUILD_ID) {
-  console.log("❌ Falta TOKEN, CLIENT_ID ou GUILD_ID no .env");
-  process.exit(1);
-}
+const cargos = [
+    "👑・Chefe da Família Souza",
+    "💍・Matriarca Souza",
+    "🔥・Sub Chefe",
+    "🥇・Sub Diretor Souza",
 
-// =====================
-// SLASH COMMAND
-// =====================
-const commands = [
-  new SlashCommandBuilder()
-    .setName('organizar')
-    .setDescription('Organiza o servidor automaticamente')
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-].map(c => c.toJSON());
+    "❤️・Henrique & Aurora",
+    "💜・Filhos da Família Souza",
+    "🌌・Astral City",
+    "☣️・FiveZ",
 
-// REGISTRAR
-const rest = new REST({ version: '10' }).setToken(TOKEN);
+    "💎・Família Souza",
+    "🧬・Filho Souza",
+    "🌸・Filha Souza",
+    "👶・Neto Souza",
+    "⭐・Nora Souza",
+    "⭐・Genro Souza",
+    "⭐・Irmã Souza",
+    "⭐・Cunhado Souza",
+    "⭐・Cunhada Souza",
 
-(async () => {
-  try {
-    await rest.put(
-      Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-      { body: commands }
-    );
-    console.log("✅ Comando registrado!");
-  } catch (err) {
-    console.log("❌ Erro comando:", err);
-  }
-})();
-
-// =====================
-// ESTRUTURA
-// =====================
-const estrutura = [
-  {
-    categoria: "📥 ENTRADA (PÚBLICO)",
-    canais: ["👋・bem-vindo","🆕・membros-novos","📩・ticket","📑・contratação","🎁・bonificações","👋・até-logo"]
-  },
-  {
-    categoria: "📢 INFORMAÇÕES",
-    canais: ["📕・regras-hp","📘・regras-hp-kids","📢・avisos","📌・informações","🤝・parcerias","🚫・blacklist"]
-  },
-  {
-    categoria: "💬 COMUNICAÇÃO",
-    canais: ["💬・chat-geral","👑・chat-diretoria","📢・anúncios","📣・comunicados"]
-  },
-  {
-    categoria: "🧠 GESTÃO / ADMIN",
-    canais: ["💰・vendas","⏳・ausência","🔴・advertências","🏆・promoções","❌・demissões","⬇️・rebaixamento","📋・medidas","📦・acumulados","📊・relatórios"]
-  }
+    "❤️・Casado(a)",
+    "💕・Namorando(a)",
+    "🎉・Organizador de Eventos",
+    "📣・Divulgador",
+    "🎬・Streamer",
+    "🛡️・Staff da Família",
+    "🤝・Parceria",
+    "💜・Nitro Booster",
+    "🔞・+18",
+    "🔇・Sem Microfone"
 ];
 
-const canaisVoz = [
-  "🔊 Recepção",
-  "🔊 Equipe",
-  "🔊 Emergência",
-  "🔊 Diretoria",
-  "🔊 Reunião"
-];
-
-// =====================
-// INTERAÇÃO
-// =====================
-client.on('interactionCreate', async interaction => {
-  if (!interaction.isChatInputCommand()) return;
-
-  if (interaction.commandName === 'organizar') {
-    await interaction.reply({ content: "🔄 Organizando servidor...", ephemeral: true });
-
-    const guild = interaction.guild;
-
-    try {
-
-      // CATEGORIAS + TEXTOS
-      for (const grupo of estrutura) {
-
-        let categoria = guild.channels.cache.find(
-          c => c.name === grupo.categoria && c.type === ChannelType.GuildCategory
-        );
-
-        if (!categoria) {
-          categoria = await guild.channels.create({
-            name: grupo.categoria,
-            type: ChannelType.GuildCategory
-          });
-        }
-
-        for (const nome of grupo.canais) {
-
-          let canal = guild.channels.cache.find(
-            c => c.name === nome && c.type === ChannelType.GuildText
-          );
-
-          if (!canal) {
-            canal = await guild.channels.create({
-              name: nome,
-              type: ChannelType.GuildText
-            });
-          }
-
-          await canal.setParent(categoria.id);
-        }
-      }
-
-      // VOZ
-      let categoriaVoz = guild.channels.cache.find(
-        c => c.name === "🔊 CALLS" && c.type === ChannelType.GuildCategory
-      );
-
-      if (!categoriaVoz) {
-        categoriaVoz = await guild.channels.create({
-          name: "🔊 CALLS",
-          type: ChannelType.GuildCategory
-        });
-      }
-
-      for (const nome of canaisVoz) {
-
-        let canal = guild.channels.cache.find(
-          c => c.name === nome && c.type === ChannelType.GuildVoice
-        );
-
-        if (!canal) {
-          canal = await guild.channels.create({
-            name: nome,
-            type: ChannelType.GuildVoice
-          });
-        }
-
-        await canal.setParent(categoriaVoz.id);
-      }
-
-      await interaction.editReply("✅ Servidor organizado com sucesso!");
-
-    } catch (err) {
-      console.log("❌ erro organizar:", err);
-      await interaction.editReply("❌ Erro ao organizar servidor");
+const categorias = [
+    {
+        nome: "👑 CASA DA FAMÍLIA SOUZA",
+        canais: [
+            ["💬・chat-da-família", ChannelType.GuildText],
+            ["📢・avisos-da-família", ChannelType.GuildText],
+            ["📸・fotos-da-família", ChannelType.GuildText],
+            ["🎬・clips-e-momentos", ChannelType.GuildText],
+            ["❤️・casais", ChannelType.GuildText]
+        ]
+    },
+    {
+        nome: "🌌 ASTRAL CITY",
+        canais: [
+            ["💬・chat-astral-city", ChannelType.GuildText],
+            ["📸・fotos-astral-city", ChannelType.GuildText],
+            ["📺・lives-astral", ChannelType.GuildText],
+            ["🎉・eventos-astral", ChannelType.GuildText]
+        ]
+    },
+    {
+        nome: "☣️ FIVEZ",
+        canais: [
+            ["💬・chat-fivez", ChannelType.GuildText],
+            ["📸・fotos-fivez", ChannelType.GuildText]
+        ]
+    },
+    {
+        nome: "🤖 BOTS",
+        canais: [
+            ["🤖・comandos", ChannelType.GuildText],
+            ["🎮・jogos", ChannelType.GuildText]
+        ]
+    },
+    {
+        nome: "🎙️ CALLS",
+        canais: [
+            ["🔊・Resenha Família", ChannelType.GuildVoice],
+            ["🔊・Geral 1", ChannelType.GuildVoice],
+            ["🔊・Geral 2", ChannelType.GuildVoice],
+            ["🔇・Sem Microfone", ChannelType.GuildVoice]
+        ]
     }
-  }
+];
+
+client.once("ready", () => {
+    console.log(`✅ ${client.user.tag} online!`);
 });
 
-// =====================
-client.once('ready', () => {
-  console.log(`🤖 Bot online: ${client.user.tag}`);
+client.on("messageCreate", async (message) => {
+    if (message.author.bot) return;
+
+    if (message.content === "!familia") {
+
+        if (!message.member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return message.reply("❌ Você precisa ser administrador.");
+        }
+
+        const guild = message.guild;
+
+        await message.channel.send("⚙️ Configurando Família Souza...");
+
+        // Criar cargos
+        for (const nomeCargo of cargos) {
+            if (!guild.roles.cache.find(r => r.name === nomeCargo)) {
+                await guild.roles.create({
+                    name: nomeCargo,
+                    reason: "Configuração Família Souza"
+                });
+            }
+        }
+
+        // Criar categorias e canais
+        for (const categoriaInfo of categorias) {
+
+            let categoria = guild.channels.cache.find(
+                c => c.name === categoriaInfo.nome &&
+                c.type === ChannelType.GuildCategory
+            );
+
+            if (!categoria) {
+                categoria = await guild.channels.create({
+                    name: categoriaInfo.nome,
+                    type: ChannelType.GuildCategory
+                });
+            }
+
+            for (const canal of categoriaInfo.canais) {
+
+                const nomeCanal = canal[0];
+                const tipoCanal = canal[1];
+
+                if (!guild.channels.cache.find(c => c.name === nomeCanal)) {
+                    await guild.channels.create({
+                        name: nomeCanal,
+                        type: tipoCanal,
+                        parent: categoria.id
+                    });
+                }
+            }
+        }
+
+        // SALA PRIVADA CHEFE
+        let categoriaChefe = guild.channels.cache.find(
+            c => c.name === "👑 CHEFE DA FAMÍLIA" &&
+            c.type === ChannelType.GuildCategory
+        );
+
+        const cargoChefe = guild.roles.cache.find(r => r.name === "👑・Chefe da Família Souza");
+
+        if (!categoriaChefe) {
+
+            categoriaChefe = await guild.channels.create({
+                name: "👑 CHEFE DA FAMÍLIA",
+                type: ChannelType.GuildCategory,
+                permissionOverwrites: [
+                    {
+                        id: guild.roles.everyone.id,
+                        deny: [PermissionFlagsBits.ViewChannel]
+                    },
+                    {
+                        id: cargoChefe.id,
+                        allow: [PermissionFlagsBits.ViewChannel]
+                    }
+                ]
+            });
+
+            await guild.channels.create({
+                name: "🔊・Call do Chefe",
+                type: ChannelType.GuildVoice,
+                parent: categoriaChefe.id
+            });
+        }
+
+        // CATEGORIAS PRIVADAS
+        const privadas = [
+            {
+                nome: "❤️ Henrique & Aurora",
+                cargo: "❤️・Henrique & Aurora",
+                texto: "📸・fotos-henrique-e-aurora",
+                chat: "💬・chat-henrique-e-aurora",
+                voz: "🔊・Call Henrique & Aurora"
+            },
+            {
+                nome: "💜 Filhos da Família Souza",
+                cargo: "💜・Filhos da Família Souza",
+                texto: "📸・fotos-dos-filhos",
+                chat: "💬・chat-dos-filhos",
+                voz: "🔊・Call dos Filhos"
+            },
+            {
+                nome: "🌌 Astral City",
+                cargo: "🌌・Astral City",
+                texto: "📸・fotos-astral-city-privado",
+                chat: "💬・chat-astral-city-privado",
+                voz: "🔊・Call Astral City"
+            },
+            {
+                nome: "☣️ FiveZ",
+                cargo: "☣️・FiveZ",
+                texto: "📸・fotos-fivez-privado",
+                chat: "💬・chat-fivez-privado",
+                voz: "🔊・Call FiveZ"
+            }
+        ];
+
+        for (const sala of privadas) {
+
+            const cargo = guild.roles.cache.find(r => r.name === sala.cargo);
+
+            if (!guild.channels.cache.find(c => c.name === sala.nome)) {
+
+                const categoria = await guild.channels.create({
+                    name: sala.nome,
+                    type: ChannelType.GuildCategory,
+                    permissionOverwrites: [
+                        {
+                            id: guild.roles.everyone.id,
+                            deny: [PermissionFlagsBits.ViewChannel]
+                        },
+                        {
+                            id: cargo.id,
+                            allow: [PermissionFlagsBits.ViewChannel]
+                        },
+                        {
+                            id: cargoChefe.id,
+                            allow: [PermissionFlagsBits.ViewChannel]
+                        }
+                    ]
+                });
+
+                await guild.channels.create({
+                    name: sala.texto,
+                    type: ChannelType.GuildText,
+                    parent: categoria.id
+                });
+
+                await guild.channels.create({
+                    name: sala.chat,
+                    type: ChannelType.GuildText,
+                    parent: categoria.id
+                });
+
+                await guild.channels.create({
+                    name: sala.voz,
+                    type: ChannelType.GuildVoice,
+                    parent: categoria.id
+                });
+            }
+        }
+
+        message.channel.send("✅ Família Souza configurada com sucesso!");
+    }
 });
 
 client.login(TOKEN);
