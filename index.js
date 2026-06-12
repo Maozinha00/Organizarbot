@@ -5,11 +5,8 @@ const {
   ChannelType
 } = require("discord.js");
 
-// TOKEN DO BOT
-const TOKEN = "MTQ5MzU5ODI2MDU0NjM3NTg4MQ.GsUh0g.J1TVnlhsSF0P_v-7hSosEC1lYCNbirks442Rdc";
-
-// ID DO SERVIDOR
-const GUILD_ID = "1456655598031601727";
+const TOKEN = process.env.TOKEN;
+const GUILD_ID = process.env.GUILD_ID;
 
 const client = new Client({
   intents: [
@@ -50,7 +47,7 @@ const cargos = [
   "🔇・Sem Microfone"
 ];
 
-const canaisPublicos = [
+const publicos = [
   {
     categoria: "👑 CASA DA FAMÍLIA SOUZA",
     canais: [
@@ -79,13 +76,6 @@ const canaisPublicos = [
     ]
   },
   {
-    categoria: "🤖 BOTS",
-    canais: [
-      ["🤖・comandos", ChannelType.GuildText],
-      ["🎮・jogos", ChannelType.GuildText]
-    ]
-  },
-  {
     categoria: "🎙️ CALLS GERAIS",
     canais: [
       ["🔊・Resenha Família", ChannelType.GuildVoice],
@@ -93,10 +83,17 @@ const canaisPublicos = [
       ["🔊・Geral 2", ChannelType.GuildVoice],
       ["🔇・Sem Microfone", ChannelType.GuildVoice]
     ]
+  },
+  {
+    categoria: "🤖 BOTS",
+    canais: [
+      ["🤖・comandos", ChannelType.GuildText],
+      ["🎮・jogos", ChannelType.GuildText]
+    ]
   }
 ];
 
-const salasPrivadas = [
+const privadas = [
   {
     categoria: "❤️ Henrique & Aurora",
     cargo: "❤️・Henrique & Aurora",
@@ -137,7 +134,6 @@ const salasPrivadas = [
 
 client.once("ready", () => {
   console.log(`✅ Bot online como ${client.user.tag}`);
-  console.log(`✅ Use o comando !familia no servidor.`);
 });
 
 client.on("messageCreate", async (message) => {
@@ -151,15 +147,15 @@ client.on("messageCreate", async (message) => {
   const guild = client.guilds.cache.get(GUILD_ID);
 
   if (!guild) {
-    return message.reply("❌ Servidor não encontrado. Confira o GUILD_ID.");
+    return message.reply("❌ Servidor não encontrado. Veja se o GUILD_ID está certo nas Variables.");
   }
 
   await message.reply("⚙️ Configurando Discord da Família Souza...");
 
-  for (const nomeCargo of cargos) {
-    if (!guild.roles.cache.find(r => r.name === nomeCargo)) {
+  for (const nome of cargos) {
+    if (!guild.roles.cache.find(r => r.name === nome)) {
       await guild.roles.create({
-        name: nomeCargo,
+        name: nome,
         reason: "Configuração Família Souza"
       });
     }
@@ -167,7 +163,7 @@ client.on("messageCreate", async (message) => {
 
   const cargoChefe = guild.roles.cache.find(r => r.name === "👑・Chefe da Família Souza");
 
-  for (const bloco of canaisPublicos) {
+  for (const bloco of publicos) {
     let categoria = guild.channels.cache.find(
       c => c.name === bloco.categoria && c.type === ChannelType.GuildCategory
     );
@@ -233,7 +229,7 @@ client.on("messageCreate", async (message) => {
     }
   }
 
-  for (const sala of salasPrivadas) {
+  for (const sala of privadas) {
     const cargoGrupo = guild.roles.cache.find(r => r.name === sala.cargo);
 
     let categoria = guild.channels.cache.find(
