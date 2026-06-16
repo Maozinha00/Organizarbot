@@ -28,31 +28,10 @@ const client = new Client({
 client.once(Events.ClientReady, async () => {
   console.log(`✅ Bot online como ${client.user.tag}`);
 
-  // DAR CARGO PARA TODOS QUE JÁ ESTÃO NO SERVIDOR
-  for (const guild of client.guilds.cache.values()) {
-    await guild.members.fetch();
-
-    const cargo = guild.roles.cache.get(CARGO_MORADOR_ID);
-    if (!cargo) {
-      console.log("❌ Cargo Morador não encontrado.");
-      continue;
-    }
-
-    guild.members.cache.forEach(async membro => {
-      if (membro.user.bot) return;
-      if (membro.roles.cache.has(CARGO_MORADOR_ID)) return;
-
-      await membro.roles.add(CARGO_MORADOR_ID).catch(err => {
-        console.log(`❌ Erro ao dar cargo para ${membro.user.tag}:`, err.message);
-      });
-    });
-
-    console.log("✅ Cargo Morador enviado para todos os membros antigos.");
-  }
-
   const canal = await client.channels.fetch(CANAL_REGISTRO_ID).catch(() => null);
   if (!canal) return console.log("❌ Canal de registro não encontrado.");
 
+  // Apaga mensagens antigas do bot para não duplicar painel
   const mensagens = await canal.messages.fetch({ limit: 10 }).catch(() => null);
 
   if (mensagens) {
@@ -67,7 +46,7 @@ client.once(Events.ClientReady, async () => {
     .setDescription(
       "Seja bem-vindo ao servidor!\n\n" +
       "Clique no botão abaixo para registrar sua entrada.\n\n" +
-      "Após o registro, você receberá o cargo **Morador**."
+      "Após o registro, você receberá o cargo **Morador** e terá acesso aos canais."
     )
     .setColor("Green")
     .setFooter({ text: "Família Souza • Registro Oficial" });
@@ -88,33 +67,6 @@ client.once(Events.ClientReady, async () => {
   console.log("✅ Painel de registro enviado.");
 });
 
-// QUANDO ALGUÉM ENTRAR NO SERVIDOR
-client.on(Events.GuildMemberAdd, async membro => {
-  if (membro.user.bot) return;
-
-  await membro.roles.add(CARGO_MORADOR_ID).catch(err => {
-    console.log("❌ Erro ao dar cargo automático:", err.message);
-  });
-
-  const canalLogs = await membro.guild.channels.fetch(CANAL_LOGS_ID).catch(() => null);
-
-  if (canalLogs) {
-    const log = new EmbedBuilder()
-      .setTitle("📥 Novo Morador Entrou")
-      .setDescription(
-        `👤 Usuário: ${membro}\n` +
-        `🆔 ID: ${membro.id}\n` +
-        `✅ Cargo Morador dado automaticamente.`
-      )
-      .setColor("Green")
-      .setThumbnail(membro.user.displayAvatarURL({ dynamic: true }))
-      .setFooter({ text: "Sistema de Entrada Automática" });
-
-    await canalLogs.send({ embeds: [log] });
-  }
-});
-
-// BOTÃO DE REGISTRO
 client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isButton()) return;
   if (interaction.customId !== "registrar_entrada") return;
@@ -123,19 +75,36 @@ client.on(Events.InteractionCreate, async interaction => {
 
   if (membro.roles.cache.has(CARGO_MORADOR_ID)) {
     return interaction.reply({
-      content: "✅ Você já está registrado e já possui o cargo **Morador**.",
+      content: "✅ Você já está registrado.",
       ephemeral: true
     });
   }
 
   await membro.roles.add(CARGO_MORADOR_ID).catch(error => {
-    console.log("❌ Erro ao adicionar cargo:", error.message);
+    console.log("❌ Erro ao adicionar cargo:", error);
   });
 
   await interaction.reply({
     content: "✅ Registro concluído! Você recebeu o cargo **Morador**.",
     ephemeral: true
   });
+
+  const canalLogs = await interaction.guild.channels.fetch(CANAL_LOGS_ID).catch(() => null);
+
+  if (canalLogs) {
+    const log = new EmbedBuilder()
+      .setTitle("📥 Novo Registro")
+      .setDescription(
+        `👤 Usuário: ${membro}\n` +
+        `🆔 ID: ${membro.id}\n` +
+        `📅 Registrado em: <t:${Math.floor(Date.now() / 1000)}:F>`
+      )
+      .setColor("Blue")
+      .setThumbnail(membro.user.displayAvatarURL({ dynamic: true }))
+      .setFooter({ text: "Sistema de Registro" });
+
+    await canalLogs.send({ embeds: [log] });
+  }
 });
 
 client.login(TOKEN);
