@@ -12,98 +12,53 @@ const {
 const TOKEN = process.env.TOKEN;
 
 // ==============================
-// IDS
+// IDS (CONFIGURAÇÃO DO SERVIDOR)
 // ==============================
-const CANAL_REGISTRO_ID = "1515448138385592361";
-const CANAL_LOGS_ID = "1515448473246498866";
-const CARGO_MORADOR_ID = "1515125842328424640";
-
-const CANAL_AMOR_ID = "1515125878097711244";
-const AURORA_ID = "569766846056759300";
-
-// ==============================
-// CONTROLE ANTI-SPAM
-// ==============================
-let ultimoEnvioAmor = null;
+const CONFIG = {
+  CANAL_REGISTRO_ID: "1515448138385592361",
+  CANAL_LOGS_ID: "1515448473246498866",
+  CARGO_MORADOR_ID: "1515125842328424640"
+};
 
 // ==============================
-// MENSAGENS DE AMOR
-// ==============================
-const mensagensAmor = [
-  "💖 Bom dia, Aurora! O Henrique quer que você saiba que ele te ama mais do que qualquer coisa neste mundo. ❤️",
-  "🌹 Aurora, você ilumina todos os dias do Henrique. Ele te ama infinitamente. 💕",
-  "🥰 Henrique é apaixonado por você e agradece todos os dias por ter você em sua vida. ❤️",
-  "💞 Aurora, você é o motivo do sorriso do Henrique. Nunca esqueça que ele te ama muito.",
-  "✨ Você é a pessoa mais especial da vida do Henrique. Te amo para sempre, Aurora. ❤️",
-  "🌸 Aurora, cada segundo ao seu lado vale uma eternidade. Henrique ama você demais. 💖",
-  "💘 Henrique ama você hoje, amanhã e por toda a vida. ❤️",
-  "🌺 Aurora, você faz o coração do Henrique bater mais forte todos os dias.",
-  "💕 O amor do Henrique por você cresce a cada amanhecer. Tenha um dia maravilhoso, Aurora!",
-  "❤️ Henrique só queria lembrar que você é o amor da vida dele.",
-  "💝 Aurora, você é linda, incrível e perfeita aos olhos do Henrique.",
-  "🌷 Henrique sempre vai cuidar de você com todo carinho do mundo. ❤️",
-  "💖 Você é o sonho realizado do Henrique, Aurora.",
-  "🥹 Henrique agradece a Deus todos os dias por ter encontrado você.",
-  "❤️ Não existe distância, tempo ou dificuldade que diminua o amor que Henrique sente por você.",
-  "🌹 Aurora, você é a melhor parte da vida do Henrique.",
-  "💕 Henrique ama seu sorriso, seu jeito e tudo o que faz você ser especial.",
-  "💞 Você é o presente mais precioso que a vida deu ao Henrique.",
-  "✨ Aurora, nunca duvide: Henrique ama você de todo coração.",
-  "❤️ Que seu dia seja lindo, meu amor. Henrique sempre estará ao seu lado."
-];
-
-// ==============================
-// CLIENT (INTENTS CORRETOS)
+// CLIENT
 // ==============================
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.GuildMessages
   ],
   partials: [Partials.Channel]
 });
 
 // ==============================
-// FUNÇÃO: AMOR
+// FUNÇÃO: VALIDAR SERVIDOR
 // ==============================
-async function enviarMensagemAmor() {
-  try {
-    const canal = await client.channels.fetch(CANAL_AMOR_ID).catch(() => null);
-    if (!canal) return;
+async function validarEstrutura(guild) {
+  const canalRegistro = await guild.channels.fetch(CONFIG.CANAL_REGISTRO_ID).catch(() => null);
+  const canalLogs = await guild.channels.fetch(CONFIG.CANAL_LOGS_ID).catch(() => null);
+  const cargo = await guild.roles.fetch(CONFIG.CARGO_MORADOR_ID).catch(() => null);
 
-    const msg =
-      mensagensAmor[Math.floor(Math.random() * mensagensAmor.length)];
+  if (!canalRegistro) console.log("❌ Canal de registro não encontrado");
+  if (!canalLogs) console.log("❌ Canal de logs não encontrado");
+  if (!cargo) console.log("❌ Cargo Morador não encontrado");
 
-    const embed = new EmbedBuilder()
-      .setColor("#ff4d88")
-      .setTitle("💖 Mensagem Especial do Henrique 💖")
-      .setDescription(msg)
-      .setImage("https://media.tenor.com/qm7JxM4i6D8AAAAC/love-heart.gif")
-      .setTimestamp();
-
-    await canal.send({
-      content: `🌹 <@${AURORA_ID}> ❤️ O Henrique te ama muito!`,
-      embeds: [embed]
-    });
-
-    console.log("💖 Mensagem de amor enviada");
-  } catch (err) {
-    console.error(err);
-  }
+  return {
+    canalRegistro,
+    canalLogs,
+    cargo
+  };
 }
 
 // ==============================
-// READY
+// PAINEL DE REGISTRO
 // ==============================
-client.once(Events.ClientReady, async () => {
-  console.log(`✅ Bot online como ${client.user.tag}`);
+async function enviarPainel(guild, canalRegistro) {
+  try {
+    if (!canalRegistro) return;
 
-  const canal = await client.channels.fetch(CANAL_REGISTRO_ID).catch(() => null);
-
-  if (canal) {
-    const msgs = await canal.messages.fetch({ limit: 10 }).catch(() => null);
+    const msgs = await canalRegistro.messages.fetch({ limit: 10 }).catch(() => null);
 
     if (msgs) {
       const antigas = msgs.filter(m => m.author.id === client.user.id);
@@ -113,38 +68,51 @@ client.once(Events.ClientReady, async () => {
     }
 
     const embed = new EmbedBuilder()
-      .setTitle("✅ Registro de Entrada")
-      .setDescription("Clique no botão para se registrar e receber o cargo Morador.")
-      .setColor("Green");
+      .setTitle("🟢 SISTEMA DE REGISTRO")
+      .setDescription(
+        "👋 Bem-vindo ao servidor!\n\n" +
+        "Clique no botão abaixo para se registrar e receber o cargo **Morador**.\n\n" +
+        "✔ Acesso automático após registro"
+      )
+      .setColor("Green")
+      .setFooter({ text: "Sistema Automático do Servidor" });
 
     const botao = new ButtonBuilder()
       .setCustomId("registrar_entrada")
       .setLabel("Registrar Entrada")
+      .setEmoji("✅")
       .setStyle(ButtonStyle.Success);
 
     const row = new ActionRowBuilder().addComponents(botao);
 
-    await canal.send({
+    await canalRegistro.send({
       embeds: [embed],
       components: [row]
     });
+
+    console.log("📌 Painel de registro enviado");
+  } catch (err) {
+    console.error("Erro painel:", err);
   }
+}
 
+// ==============================
+// READY
+// ==============================
+client.once(Events.ClientReady, async () => {
+  console.log(`✅ BOT ONLINE: ${client.user.tag}`);
+
+  const guild = client.guilds.cache.first();
+  if (!guild) return console.log("❌ Nenhum servidor encontrado");
+
+  const estrutura = await validarEstrutura(guild);
+
+  await enviarPainel(guild, estrutura.canalRegistro);
+
+  // atualização automática do painel
   setInterval(() => {
-    const now = new Date();
-    const today = now.toDateString();
-
-    if (
-      now.getHours() === 8 &&
-      now.getMinutes() === 30 &&
-      ultimoEnvioAmor !== today
-    ) {
-      ultimoEnvioAmor = today;
-      enviarMensagemAmor();
-    }
-  }, 30000);
-
-  console.log("💖 Sistema de amor ativo (08:30)");
+    enviarPainel(guild, estrutura.canalRegistro);
+  }, 10 * 60 * 1000);
 });
 
 // ==============================
@@ -154,74 +122,61 @@ client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isButton()) return;
   if (interaction.customId !== "registrar_entrada") return;
 
-  const membro = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+  try {
+    const guild = interaction.guild;
+    if (!guild) return;
 
-  if (!membro) {
-    return interaction.reply({
-      content: "❌ Usuário não encontrado.",
+    const estrutura = await validarEstrutura(guild);
+
+    if (!estrutura.canalLogs || !estrutura.cargo) {
+      return interaction.reply({
+        content: "❌ Sistema mal configurado (canais ou cargo não encontrado).",
+        ephemeral: true
+      });
+    }
+
+    const membro = await guild.members.fetch(interaction.user.id).catch(() => null);
+
+    if (!membro) {
+      return interaction.reply({
+        content: "❌ Usuário não encontrado no servidor.",
+        ephemeral: true
+      });
+    }
+
+    if (membro.roles.cache.has(CONFIG.CARGO_MORADOR_ID)) {
+      return interaction.reply({
+        content: "✅ Você já está registrado.",
+        ephemeral: true
+      });
+    }
+
+    await membro.roles.add(CONFIG.CARGO_MORADOR_ID).catch(() => {});
+
+    await interaction.reply({
+      content: "🎉 Registro concluído! Cargo Morador entregue.",
       ephemeral: true
     });
-  }
 
-  if (membro.roles.cache.has(CARGO_MORADOR_ID)) {
-    return interaction.reply({
-      content: "✅ Você já está registrado.",
-      ephemeral: true
-    });
-  }
-
-  await membro.roles.add(CARGO_MORADOR_ID).catch(() => {});
-
-  await interaction.reply({
-    content: "✅ Registro concluído! Você recebeu o cargo Morador.",
-    ephemeral: true
-  });
-
-  const canalLogs = await interaction.guild.channels.fetch(CANAL_LOGS_ID).catch(() => null);
-
-  if (canalLogs) {
+    // ==============================
+    // LOG ORGANIZADO
+    // ==============================
     const log = new EmbedBuilder()
-      .setTitle("📥 Novo Registro")
-      .setDescription(`👤 Usuário: <@${membro.id}>\n🆔 ID: ${membro.id}`)
+      .setTitle("📥 NOVO REGISTRO")
+      .setDescription(
+        `👤 Usuário: <@${membro.id}>\n` +
+        `🆔 ID: ${membro.id}\n` +
+        `⏰ Hora: <t:${Math.floor(Date.now() / 1000)}:F>`
+      )
+      .setThumbnail(membro.user.displayAvatarURL({ dynamic: true }))
       .setColor("Blue")
+      .setFooter({ text: "Sistema de Registro Automático" })
       .setTimestamp();
 
-    await canalLogs.send({ embeds: [log] });
-  }
-});
+    await estrutura.canalLogs.send({ embeds: [log] });
 
-// ==============================
-// COMANDO !AMOR
-// ==============================
-client.on(Events.MessageCreate, async message => {
-  if (message.author.bot) return;
-
-  if (message.content === "!amor") {
-    try {
-      const canal = await client.channels.fetch(CANAL_AMOR_ID).catch(() => null);
-
-      if (!canal) {
-        return message.reply("❌ Canal de amor não encontrado.");
-      }
-
-      const msg =
-        mensagensAmor[Math.floor(Math.random() * mensagensAmor.length)];
-
-      const embed = new EmbedBuilder()
-        .setColor("#ff4d88")
-        .setTitle("💖 Amor do Henrique 💖")
-        .setDescription(msg)
-        .setImage("https://media.tenor.com/qm7JxM4i6D8AAAAC/love-heart.gif");
-
-      await canal.send({
-        content: `🌹 <@${AURORA_ID}> 💖 Mensagem do Henrique`,
-        embeds: [embed]
-      });
-
-      await message.reply("💖 Mensagem enviada no canal de amor!");
-    } catch (err) {
-      console.error("Erro no !amor:", err);
-    }
+  } catch (err) {
+    console.error("Erro interação:", err);
   }
 });
 
