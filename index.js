@@ -22,7 +22,12 @@ const CANAL_AMOR_ID = "1515125878097711244";
 const AURORA_ID = "569766846056759300";
 
 // ==============================
-// MENSAGENS DE AMOR
+// CONTROLE ANTI-DUPLICAÇÃO
+// ==============================
+let ultimoEnvioAmor = null;
+
+// ==============================
+// MENSAGENS ANTIGAS DE AMOR
 // ==============================
 const mensagensAmor = [
   "💖 Bom dia, Aurora! O Henrique quer que você saiba que ele te ama mais do que qualquer coisa neste mundo. ❤️",
@@ -74,13 +79,13 @@ async function enviarMensagemAmor() {
       .setColor("#ff4d88")
       .setTitle("💖 Mensagem Especial do Henrique 💖")
       .setDescription(mensagem)
-      .setThumbnail(client.user.displayAvatarURL())
+      .setThumbnail(client.user?.displayAvatarURL() || null)
       .setImage("https://media.tenor.com/qm7JxM4i6D8AAAAC/love-heart.gif")
       .setFooter({ text: "Com todo amor ❤️" })
       .setTimestamp();
 
     await canal.send({
-      content: `🌹 Bom dia <@${AURORA_ID}> ❤️`,
+      content: `🌹 Bom dia <@${AURORA_ID}> ❤️ O Henrique tem algo especial pra você... 💖`,
       embeds: [embed]
     });
 
@@ -113,9 +118,7 @@ client.once(Events.ClientReady, async () => {
 
     const embed = new EmbedBuilder()
       .setTitle("✅ Registro de Entrada")
-      .setDescription(
-        "Clique abaixo para se registrar e receber o cargo de Morador."
-      )
+      .setDescription("Clique no botão abaixo para se registrar e receber o cargo de Morador.")
       .setColor("Green");
 
     const botao = new ButtonBuilder()
@@ -125,22 +128,30 @@ client.once(Events.ClientReady, async () => {
 
     const row = new ActionRowBuilder().addComponents(botao);
 
-    await canal.send({ embeds: [embed], components: [row] });
+    await canal.send({
+      embeds: [embed],
+      components: [row]
+    });
 
     console.log("📌 Painel de registro enviado.");
   }
 
   // ==========================
-  // LOOP MENSAGEM DE AMOR
+  // LOOP MENSAGEM DE AMOR (08:10)
   // ==========================
   setInterval(() => {
     const agora = new Date();
+    const hoje = agora.toDateString();
 
-    // 08:10 todos os dias
-    if (agora.getHours() === 8 && agora.getMinutes() === 10) {
+    if (
+      agora.getHours() === 8 &&
+      agora.getMinutes() === 10 &&
+      ultimoEnvioAmor !== hoje
+    ) {
+      ultimoEnvioAmor = hoje;
       enviarMensagemAmor();
     }
-  }, 60000);
+  }, 30000);
 
   console.log("💖 Sistema de amor ativado (08:10)");
 });
@@ -150,10 +161,16 @@ client.once(Events.ClientReady, async () => {
 // ==============================
 client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isButton()) return;
-
   if (interaction.customId !== "registrar_entrada") return;
 
-  const membro = await interaction.guild.members.fetch(interaction.user.id);
+  const membro = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+
+  if (!membro) {
+    return interaction.reply({
+      content: "Não consegui encontrar seu usuário.",
+      ephemeral: true
+    });
+  }
 
   if (membro.roles.cache.has(CARGO_MORADOR_ID)) {
     return interaction.reply({
