@@ -51,8 +51,10 @@ const mensagensAmor = [
   "✨ Aurora, nunca duvide: Henrique ama você de todo coração.",
   "❤️ Que seu dia seja lindo, meu amor. Henrique sempre estará ao seu lado."
 ];
+];
+
 // ==============================
-// CLIENT
+// CLIENT (INTENTS CORRETOS)
 // ==============================
 const client = new Client({
   intents: [
@@ -65,36 +67,31 @@ const client = new Client({
 });
 
 // ==============================
-// FUNÇÃO: ENVIAR AMOR
+// FUNÇÃO: AMOR
 // ==============================
-async function enviarMensagemAmor(canalMensagem = null) {
+async function enviarMensagemAmor() {
   try {
-    const canal = canalMensagem
-      ? canalMensagem
-      : await client.channels.fetch(CANAL_AMOR_ID).catch(() => null);
-
+    const canal = await client.channels.fetch(CANAL_AMOR_ID).catch(() => null);
     if (!canal) return;
 
-    const mensagem =
+    const msg =
       mensagensAmor[Math.floor(Math.random() * mensagensAmor.length)];
 
     const embed = new EmbedBuilder()
       .setColor("#ff4d88")
       .setTitle("💖 Mensagem Especial do Henrique 💖")
-      .setDescription(mensagem)
-      .setThumbnail(client.user?.displayAvatarURL() || null)
+      .setDescription(msg)
       .setImage("https://media.tenor.com/qm7JxM4i6D8AAAAC/love-heart.gif")
-      .setFooter({ text: "Com todo amor ❤️" })
       .setTimestamp();
 
     await canal.send({
-      content: `🌹 <@${AURORA_ID}> 💖 O Henrique te ama muito!`,
+      content: `🌹 <@${AURORA_ID}> ❤️ O Henrique te ama muito!`,
       embeds: [embed]
     });
 
-    console.log("💖 Mensagem de amor enviada.");
+    console.log("💖 Mensagem de amor enviada");
   } catch (err) {
-    console.error("Erro ao enviar mensagem de amor:", err);
+    console.error(err);
   }
 }
 
@@ -121,7 +118,7 @@ client.once(Events.ClientReady, async () => {
 
     const embed = new EmbedBuilder()
       .setTitle("✅ Registro de Entrada")
-      .setDescription("Clique no botão abaixo para se registrar e receber o cargo Morador.")
+      .setDescription("Clique no botão para se registrar e receber o cargo Morador.")
       .setColor("Green");
 
     const botao = new ButtonBuilder()
@@ -135,28 +132,26 @@ client.once(Events.ClientReady, async () => {
       embeds: [embed],
       components: [row]
     });
-
-    console.log("📌 Painel de registro enviado.");
   }
 
   // ==========================
   // AUTOMÁTICO 08:30
   // ==========================
   setInterval(() => {
-    const agora = new Date();
-    const hoje = agora.toDateString();
+    const now = new Date();
+    const today = now.toDateString();
 
     if (
-      agora.getHours() === 8 &&
-      agora.getMinutes() === 30 &&
-      ultimoEnvioAmor !== hoje
+      now.getHours() === 8 &&
+      now.getMinutes() === 30 &&
+      ultimoEnvioAmor !== today
     ) {
-      ultimoEnvioAmor = hoje;
+      ultimoEnvioAmor = today;
       enviarMensagemAmor();
     }
   }, 30000);
 
-  console.log("💖 Sistema automático + manual ativado");
+  console.log("💖 Sistema de amor ativo (08:30)");
 });
 
 // ==============================
@@ -170,7 +165,7 @@ client.on(Events.InteractionCreate, async interaction => {
 
   if (!membro) {
     return interaction.reply({
-      content: "❌ Não consegui encontrar seu usuário.",
+      content: "❌ Usuário não encontrado.",
       ephemeral: true
     });
   }
@@ -203,13 +198,37 @@ client.on(Events.InteractionCreate, async interaction => {
 });
 
 // ==============================
-// COMANDO MANUAL !AMOR
+// COMANDO !AMOR (CORRIGIDO)
 // ==============================
 client.on(Events.MessageCreate, async message => {
   if (message.author.bot) return;
 
   if (message.content === "!amor") {
-    enviarMensagemAmor(message.channel);
+    try {
+      const canal = await client.channels.fetch(CANAL_AMOR_ID).catch(() => null);
+
+      if (!canal) {
+        return message.reply("❌ Canal de amor não encontrado.");
+      }
+
+      const msg =
+        mensagensAmor[Math.floor(Math.random() * mensagensAmor.length)];
+
+      const embed = new EmbedBuilder()
+        .setColor("#ff4d88")
+        .setTitle("💖 Amor do Henrique 💖")
+        .setDescription(msg)
+        .setImage("https://media.tenor.com/qm7JxM4i6D8AAAAC/love-heart.gif");
+
+      await canal.send({
+        content: `🌹 <@${AURORA_ID}> 💖 Mensagem do Henrique`,
+        embeds: [embed]
+      });
+
+      await message.reply("💖 Mensagem enviada no canal de amor!");
+    } catch (err) {
+      console.error("Erro no !amor:", err);
+    }
   }
 });
 
