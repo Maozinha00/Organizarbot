@@ -22,12 +22,12 @@ const CANAL_AMOR_ID = "1515125878097711244";
 const AURORA_ID = "569766846056759300";
 
 // ==============================
-// CONTROLE ANTI-DUPLICAÇÃO
+// CONTROLE ANTI-SPAM
 // ==============================
 let ultimoEnvioAmor = null;
 
 // ==============================
-// MENSAGENS ANTIGAS DE AMOR
+// MENSAGENS DE AMOR
 // ==============================
 const mensagensAmor = [
   "💖 Bom dia, Aurora! O Henrique quer que você saiba que ele te ama mais do que qualquer coisa neste mundo. ❤️",
@@ -51,7 +51,6 @@ const mensagensAmor = [
   "✨ Aurora, nunca duvide: Henrique ama você de todo coração.",
   "❤️ Que seu dia seja lindo, meu amor. Henrique sempre estará ao seu lado."
 ];
-
 // ==============================
 // CLIENT
 // ==============================
@@ -59,17 +58,21 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
   ],
   partials: [Partials.Channel]
 });
 
 // ==============================
-// FUNÇÃO: MENSAGEM DE AMOR
+// FUNÇÃO: ENVIAR AMOR
 // ==============================
-async function enviarMensagemAmor() {
+async function enviarMensagemAmor(canalMensagem = null) {
   try {
-    const canal = await client.channels.fetch(CANAL_AMOR_ID).catch(() => null);
+    const canal = canalMensagem
+      ? canalMensagem
+      : await client.channels.fetch(CANAL_AMOR_ID).catch(() => null);
+
     if (!canal) return;
 
     const mensagem =
@@ -85,7 +88,7 @@ async function enviarMensagemAmor() {
       .setTimestamp();
 
     await canal.send({
-      content: `🌹 Bom dia <@${AURORA_ID}> ❤️ O Henrique tem algo especial pra você... 💖`,
+      content: `🌹 <@${AURORA_ID}> 💖 O Henrique te ama muito!`,
       embeds: [embed]
     });
 
@@ -96,21 +99,21 @@ async function enviarMensagemAmor() {
 }
 
 // ==============================
-// READY EVENT
+// READY
 // ==============================
 client.once(Events.ClientReady, async () => {
   console.log(`✅ Bot online como ${client.user.tag}`);
 
   // ==========================
-  // PAINEL DE REGISTRO
+  // PAINEL REGISTRO
   // ==========================
   const canal = await client.channels.fetch(CANAL_REGISTRO_ID).catch(() => null);
 
   if (canal) {
-    const mensagens = await canal.messages.fetch({ limit: 10 }).catch(() => null);
+    const msgs = await canal.messages.fetch({ limit: 10 }).catch(() => null);
 
-    if (mensagens) {
-      const antigas = mensagens.filter(m => m.author.id === client.user.id);
+    if (msgs) {
+      const antigas = msgs.filter(m => m.author.id === client.user.id);
       for (const msg of antigas.values()) {
         await msg.delete().catch(() => {});
       }
@@ -118,7 +121,7 @@ client.once(Events.ClientReady, async () => {
 
     const embed = new EmbedBuilder()
       .setTitle("✅ Registro de Entrada")
-      .setDescription("Clique no botão abaixo para se registrar e receber o cargo de Morador.")
+      .setDescription("Clique no botão abaixo para se registrar e receber o cargo Morador.")
       .setColor("Green");
 
     const botao = new ButtonBuilder()
@@ -137,7 +140,7 @@ client.once(Events.ClientReady, async () => {
   }
 
   // ==========================
-  // LOOP MENSAGEM DE AMOR (08:10)
+  // AUTOMÁTICO 08:30
   // ==========================
   setInterval(() => {
     const agora = new Date();
@@ -145,7 +148,7 @@ client.once(Events.ClientReady, async () => {
 
     if (
       agora.getHours() === 8 &&
-      agora.getMinutes() === 10 &&
+      agora.getMinutes() === 30 &&
       ultimoEnvioAmor !== hoje
     ) {
       ultimoEnvioAmor = hoje;
@@ -153,11 +156,11 @@ client.once(Events.ClientReady, async () => {
     }
   }, 30000);
 
-  console.log("💖 Sistema de amor ativado (08:10)");
+  console.log("💖 Sistema automático + manual ativado");
 });
 
 // ==============================
-// INTERAÇÕES (BOTÃO REGISTRO)
+// BOTÃO REGISTRO
 // ==============================
 client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isButton()) return;
@@ -167,14 +170,14 @@ client.on(Events.InteractionCreate, async interaction => {
 
   if (!membro) {
     return interaction.reply({
-      content: "Não consegui encontrar seu usuário.",
+      content: "❌ Não consegui encontrar seu usuário.",
       ephemeral: true
     });
   }
 
   if (membro.roles.cache.has(CARGO_MORADOR_ID)) {
     return interaction.reply({
-      content: "Você já está registrado.",
+      content: "✅ Você já está registrado.",
       ephemeral: true
     });
   }
@@ -182,7 +185,7 @@ client.on(Events.InteractionCreate, async interaction => {
   await membro.roles.add(CARGO_MORADOR_ID).catch(() => {});
 
   await interaction.reply({
-    content: "Registro concluído! Você recebeu o cargo de Morador.",
+    content: "✅ Registro concluído! Você recebeu o cargo Morador.",
     ephemeral: true
   });
 
@@ -191,11 +194,22 @@ client.on(Events.InteractionCreate, async interaction => {
   if (canalLogs) {
     const log = new EmbedBuilder()
       .setTitle("📥 Novo Registro")
-      .setDescription(`Usuário: <@${membro.id}>`)
+      .setDescription(`👤 Usuário: <@${membro.id}>\n🆔 ID: ${membro.id}`)
       .setColor("Blue")
       .setTimestamp();
 
     await canalLogs.send({ embeds: [log] });
+  }
+});
+
+// ==============================
+// COMANDO MANUAL !AMOR
+// ==============================
+client.on(Events.MessageCreate, async message => {
+  if (message.author.bot) return;
+
+  if (message.content === "!amor") {
+    enviarMensagemAmor(message.channel);
   }
 });
 
