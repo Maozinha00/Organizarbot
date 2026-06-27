@@ -51,7 +51,6 @@ const mensagensAmor = [
   "✨ Aurora, nunca duvide: Henrique ama você de todo coração.",
   "❤️ Que seu dia seja lindo, meu amor. Henrique sempre estará ao seu lado."
 ];
-];
 
 // ==============================
 // CLIENT (INTENTS CORRETOS)
@@ -101,9 +100,6 @@ async function enviarMensagemAmor() {
 client.once(Events.ClientReady, async () => {
   console.log(`✅ Bot online como ${client.user.tag}`);
 
-  // ==========================
-  // PAINEL REGISTRO
-  // ==========================
   const canal = await client.channels.fetch(CANAL_REGISTRO_ID).catch(() => null);
 
   if (canal) {
@@ -134,9 +130,6 @@ client.once(Events.ClientReady, async () => {
     });
   }
 
-  // ==========================
-  // AUTOMÁTICO 08:30
-  // ==========================
   setInterval(() => {
     const now = new Date();
     const today = now.toDateString();
@@ -198,7 +191,7 @@ client.on(Events.InteractionCreate, async interaction => {
 });
 
 // ==============================
-// COMANDO !AMOR (CORRIGIDO)
+// COMANDO !AMOR
 // ==============================
 client.on(Events.MessageCreate, async message => {
   if (message.author.bot) return;
