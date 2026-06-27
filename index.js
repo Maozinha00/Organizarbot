@@ -25,16 +25,26 @@ const AURORA_ID = "569766846056759300";
 // MENSAGENS DE AMOR
 // ==============================
 const mensagensAmor = [
-  "💖 Bom dia, Aurora! O Henrique te ama mais do que tudo ❤️",
-  "🌹 Você é o motivo do sorriso do Henrique todos os dias 💕",
-  "💘 Henrique te ama hoje, amanhã e sempre ❤️",
-  "✨ Você é a pessoa mais especial da vida dele 💖",
-  "🥰 Ele agradece todos os dias por ter você ❤️",
-  "🌷 Você ilumina a vida do Henrique 💕",
-  "💞 O amor dele por você nunca vai acabar ❤️",
-  "🌸 Você é o maior presente da vida dele 💖",
-  "❤️ Henrique ama cada detalhe seu",
-  "💝 Você é o amor da vida dele Aurora 🥰"
+  "💖 Bom dia, Aurora! O Henrique quer que você saiba que ele te ama mais do que qualquer coisa neste mundo. ❤️",
+  "🌹 Aurora, você ilumina todos os dias do Henrique. Ele te ama infinitamente. 💕",
+  "🥰 Henrique é apaixonado por você e agradece todos os dias por ter você em sua vida. ❤️",
+  "💞 Aurora, você é o motivo do sorriso do Henrique. Nunca esqueça que ele te ama muito.",
+  "✨ Você é a pessoa mais especial da vida do Henrique. Te amo para sempre, Aurora. ❤️",
+  "🌸 Aurora, cada segundo ao seu lado vale uma eternidade. Henrique ama você demais. 💖",
+  "💘 Henrique ama você hoje, amanhã e por toda a vida. ❤️",
+  "🌺 Aurora, você faz o coração do Henrique bater mais forte todos os dias.",
+  "💕 O amor do Henrique por você cresce a cada amanhecer. Tenha um dia maravilhoso, Aurora!",
+  "❤️ Henrique só queria lembrar que você é o amor da vida dele.",
+  "💝 Aurora, você é linda, incrível e perfeita aos olhos do Henrique.",
+  "🌷 Henrique sempre vai cuidar de você com todo carinho do mundo. ❤️",
+  "💖 Você é o sonho realizado do Henrique, Aurora.",
+  "🥹 Henrique agradece a Deus todos os dias por ter encontrado você.",
+  "❤️ Não existe distância, tempo ou dificuldade que diminua o amor que Henrique sente por você.",
+  "🌹 Aurora, você é a melhor parte da vida do Henrique.",
+  "💕 Henrique ama seu sorriso, seu jeito e tudo o que faz você ser especial.",
+  "💞 Você é o presente mais precioso que a vida deu ao Henrique.",
+  "✨ Aurora, nunca duvide: Henrique ama você de todo coração.",
+  "❤️ Que seu dia seja lindo, meu amor. Henrique sempre estará ao seu lado."
 ];
 
 // ==============================
