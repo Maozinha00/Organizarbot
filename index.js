@@ -54,10 +54,11 @@ async function validarEstrutura(guild) {
 // ==============================
 // PAINEL DE REGISTRO
 // ==============================
-async function enviarPainel(guild, canalRegistro) {
+async function enviarPainel(canalRegistro) {
   try {
     if (!canalRegistro) return;
 
+    // Remove painéis antigos do bot
     const msgs = await canalRegistro.messages.fetch({ limit: 10 }).catch(() => null);
 
     if (msgs) {
@@ -107,12 +108,8 @@ client.once(Events.ClientReady, async () => {
 
   const estrutura = await validarEstrutura(guild);
 
-  await enviarPainel(guild, estrutura.canalRegistro);
-
-  // atualização automática do painel
-  setInterval(() => {
-    enviarPainel(guild, estrutura.canalRegistro);
-  }, 10 * 60 * 1000);
+  // Envia o painel apenas uma vez ao iniciar
+  await enviarPainel(estrutura.canalRegistro);
 });
 
 // ==============================
@@ -151,16 +148,13 @@ client.on(Events.InteractionCreate, async interaction => {
       });
     }
 
-    await membro.roles.add(CONFIG.CARGO_MORADOR_ID).catch(() => {});
+    await membro.roles.add(CONFIG.CARGO_MORADOR_ID);
 
     await interaction.reply({
       content: "🎉 Registro concluído! Cargo Morador entregue.",
       ephemeral: true
     });
 
-    // ==============================
-    // LOG ORGANIZADO
-    // ==============================
     const log = new EmbedBuilder()
       .setTitle("📥 NOVO REGISTRO")
       .setDescription(
@@ -173,10 +167,19 @@ client.on(Events.InteractionCreate, async interaction => {
       .setFooter({ text: "Sistema de Registro Automático" })
       .setTimestamp();
 
-    await estrutura.canalLogs.send({ embeds: [log] });
+    await estrutura.canalLogs.send({
+      embeds: [log]
+    });
 
   } catch (err) {
     console.error("Erro interação:", err);
+
+    if (!interaction.replied && !interaction.deferred) {
+      interaction.reply({
+        content: "❌ Ocorreu um erro ao realizar seu registro.",
+        ephemeral: true
+      }).catch(() => {});
+    }
   }
 });
 
