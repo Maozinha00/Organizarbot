@@ -17,7 +17,6 @@
  * ============================================================================
  */
 
-require('dotenv').config();
 const {
     Client,
     GatewayIntentBits,
@@ -28,16 +27,13 @@ const {
     ActionRowBuilder,
     StringSelectMenuBuilder,
     StringSelectMenuOptionBuilder,
-    ModalBuilder,
-    TextInputBuilder,
-    TextInputStyle,
     Events,
     PermissionsBitField
 } = require("discord.js");
 
 const fs = require("fs");
 
-const TOKEN = process.env.TOKEN || "MTUxNT...SEU_TOKEN_DO_BOT...aBcD1234";
+const TOKEN = process.env.TOKEN;
 
 // ===============================
 // CONFIGURAÇÃO DO SISTEMA
