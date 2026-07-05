@@ -17,6 +17,7 @@
  * ============================================================================
  */
 
+require('dotenv').config();
 const {
     Client,
     GatewayIntentBits,
@@ -27,13 +28,17 @@ const {
     ActionRowBuilder,
     StringSelectMenuBuilder,
     StringSelectMenuOptionBuilder,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle,
     Events,
     PermissionsBitField
 } = require("discord.js");
 
 const fs = require("fs");
 
-const TOKEN = process.env.TOKEN;
+const TOKEN = process.env.TOKEN || "MTUxNT...SEU_TOKEN_DO_BOT...aBcD1234";
+
 // ===============================
 // CONFIGURAÇÃO DO SISTEMA
 // ===============================
@@ -477,7 +482,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 const campoApelido = embedAtual.fields.find(f => f.name.includes("Novo Apelido"));
                 const novoApelido = campoApelido ? campoApelido.value.replace(/[`]/g, "").trim() : null;
 
-                // Adicionar o cargo Morador + Cargo do Grupo escolhido
+                // 1. Remover todos os cargos de grupos/facções antigos para não acumular tags/cargos!
+                const todosGruposIds = CONFIG.GRUPOS.map(g => g.roleId);
+                const cargosRemover = membroAlvo.roles.cache.filter(r => todosGruposIds.includes(r.id) && r.id !== alvoRoleId);
+                if (cargosRemover.size > 0) {
+                    await membroAlvo.roles.remove(cargosRemover).catch(() => console.log("Aviso: Sem permissão para remover cargo antigo do grupo"));
+                }
+
+                // 2. Adicionar o cargo Morador + Cargo do Grupo escolhido
                 const cargosParaAdicionar = [CONFIG.CARGO_MORADOR_ID];
                 if (alvoRoleId && alvoRoleId !== CONFIG.CARGO_MORADOR_ID) {
                     cargosParaAdicionar.push(alvoRoleId);
@@ -572,6 +584,38 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 content: "❌ **Erro ao processar a avaliação:**\n`" + (err.message || err) + "`\n\n*Dica: Verifique em Configurações do Servidor -> Cargos se o cargo do Bot está posicionado acima dos cargos que ele precisa atribuir.*",
                 ephemeral: true
             }).catch(() => {});
+        }
+    }
+});
+
+// ===============================
+// COMANDOS DE ADMINISTRAÇÃO NO CHAT (!limparcargos)
+// ===============================
+client.on("messageCreate", async (message) => {
+    if (message.author.bot || !message.guild) return;
+
+    if (message.content.toLowerCase() === "!limparcargos" || message.content.toLowerCase() === "!resetgrupos") {
+        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            return message.reply("❌ Apenas Administradores podem executar a limpeza geral de cargos para recadastro.");
+        }
+
+        const msgStatus = await message.reply("⏳ **Iniciando limpeza de cargos dos Amigos e Facções...** Por favor, aguarde.");
+        const todosGruposIds = CONFIG.GRUPOS.map(g => g.roleId);
+        let countRemovidos = 0;
+
+        try {
+            const membros = await message.guild.members.fetch();
+            for (const [id, mem] of membros) {
+                if (mem.user.bot) continue;
+                const cargosRemover = mem.roles.cache.filter(r => todosGruposIds.includes(r.id));
+                if (cargosRemover.size > 0) {
+                    await mem.roles.remove(cargosRemover).catch(() => {});
+                    countRemovidos++;
+                }
+            }
+            await msgStatus.edit("✅ **Limpeza Concluída com Sucesso!**\n> 🧹 Cargos dos Amigos e Facções foram retirados de **" + countRemovidos + "** membros.\n> 📢 O botão do painel está visível e liberado para todos fazerem o registro obrigatório com Tag e ID!");
+        } catch (err) {
+            await msgStatus.edit("❌ Erro ao remover cargos: " + (err.message || err));
         }
     }
 });
