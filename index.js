@@ -7,9 +7,11 @@ const {
   ButtonStyle,
   ActionRowBuilder,
   StringSelectMenuBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
   Events,
-  PermissionsBitField,
-  ComponentType
+  PermissionsBitField
 } = require("discord.js");
 const fs = require("fs");
 
@@ -37,26 +39,31 @@ const GRUPOS = {
   "amigos": {
     nome: "Amigos",
     cargoId: "1515125842328424640",
-    emoji: "👥"
+    emoji: "👥",
+    tag: "AMG"
   },
   "familia": {
     nome: "Família",
     cargoId: "1515125828185493675",
-    emoji: "👨‍👩‍👧‍👦"
+    emoji: "👨‍👩‍👧‍👦",
+    tag: "Souza"
   },
   "fivez_hunters": {
     nome: "FiveZ Hunters",
     cargoId: "1515125826780135485",
-    emoji: "🎯"
+    emoji: "🎯",
+    tag: "Hunters"
   },
   "lumenfall_city": {
     nome: "Lumenfall City",
     cargoId: "1520163929106550794",
-    emoji: "🏙️"
+    emoji: "🏙️",
+    tag: "Lumen"
   }
 };
 
 const PANEL_FILE = "./panel.json";
+const PENDING_FILE = "./pending.json";
 const cooldown = new Map();
 
 // ===============================
@@ -91,6 +98,45 @@ function carregarPainel() {
   } catch {
     return null;
   }
+}
+
+// ===============================
+// JSON - REGISTROS PENDENTES
+// ===============================
+function carregarPendentes() {
+  if (!fs.existsSync(PENDING_FILE)) return {};
+  try {
+    return JSON.parse(fs.readFileSync(PENDING_FILE));
+  } catch {
+    return {};
+  }
+}
+
+function salvarPendentes(data) {
+  fs.writeFileSync(
+    PENDING_FILE,
+    JSON.stringify(data, null, 4)
+  );
+}
+
+function adicionarPendente(userId, dados) {
+  const pendentes = carregarPendentes();
+  pendentes[userId] = {
+    ...dados,
+    timestamp: Date.now()
+  };
+  salvarPendentes(pendentes);
+}
+
+function obterPendente(userId) {
+  const pendentes = carregarPendentes();
+  return pendentes[userId] || null;
+}
+
+function removerPendente(userId) {
+  const pendentes = carregarPendentes();
+  delete pendentes[userId];
+  salvarPendentes(pendentes);
 }
 
 // ===============================
@@ -133,12 +179,14 @@ Para acessar todo o servidor, realize seu registro escolhendo seu grupo abaixo.
 
 **Como funciona:**
 1️⃣ Clique no botão "Realizar Registro"
-2️⃣ Escolha seu grupo no menu
-3️⃣ Aguarde a aprovação da staff
+2️⃣ Preencha seu Nome e ID do jogo
+3️⃣ Escolha seu grupo no menu
+4️⃣ Aguarde a aprovação da staff
 
 Você receberá:
 ✅ Cargo Morador
 ✅ Cargo do seu grupo
+🏷️ Apelido automático no servidor
 🔓 Liberação dos canais
 🎉 Acesso completo ao servidor
 `)
@@ -188,8 +236,9 @@ async function enviarPainel(guild, canal) {
 // ===============================
 // CRIAR SOLICITAÇÃO DE REGISTRO
 // ===============================
-function criarSolicitacao(membro, grupoEscolhido) {
+function criarSolicitacao(membro, grupoEscolhido, nomeJogador, idJogador) {
   const grupo = GRUPOS[grupoEscolhido];
+  const nickname = `|${grupo.tag}| ${nomeJogador} | ${idJogador}`;
 
   const embed = new EmbedBuilder()
     .setColor("#FFA500")
@@ -202,13 +251,28 @@ function criarSolicitacao(membro, grupoEscolhido) {
         inline: true
       },
       {
-        name: "🆔 ID",
+        name: "🆔 ID Discord",
         value: `${membro.id}`,
+        inline: true
+      },
+      {
+        name: "🎮 Nome do Jogador",
+        value: `${nomeJogador}`,
+        inline: true
+      },
+      {
+        name: "🔢 ID do Jogador",
+        value: `${idJogador}`,
         inline: true
       },
       {
         name: "🏷️ Grupo Escolhido",
         value: `${grupo.emoji} ${grupo.nome}`,
+        inline: false
+      },
+      {
+        name: "📛 Apelido que será definido",
+        value: `\`${nickname}\``,
         inline: false
       },
       {
@@ -243,6 +307,18 @@ function criarSolicitacao(membro, grupoEscolhido) {
 }
 
 // ===============================
+// GERAR APELIDO
+// ===============================
+function gerarNickname(tag, nome, idJogador) {
+  const nick = `|${tag}| ${nome} | ${idJogador}`;
+  // Discord limita nicknames a 32 caracteres
+  if (nick.length > 32) {
+    return nick.substring(0, 32);
+  }
+  return nick;
+}
+
+// ===============================
 // READY EVENT
 // ===============================
 client.once(Events.ClientReady, async () => {
@@ -258,13 +334,14 @@ client.once(Events.ClientReady, async () => {
 });
 
 // ===============================
-// INTERAÇÃO - BOTÃO "REALIZAR REGISTRO"
+// INTERAÇÃO - BOTÕES E MODAIS
 // ===============================
 client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isButton()) return;
 
-  // Botão do painel de registro
-  if (interaction.customId === "registrar_entrada") {
+  // ===============================
+  // BOTÃO "REALIZAR REGISTRO" - ABRE MODAL
+  // ===============================
+  if (interaction.isButton() && interaction.customId === "registrar_entrada") {
     try {
       const guild = interaction.guild;
       if (!guild) return;
@@ -296,13 +373,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
 
-      if (!guild.members.me.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
-        return interaction.reply({
-          content: "❌ Não tenho permissão para gerenciar cargos.",
-          ephemeral: true
-        });
-      }
-
       const membro = await guild.members.fetch(interaction.user.id).catch(() => null);
       if (!membro) {
         return interaction.reply({
@@ -322,6 +392,81 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
 
       // ===============================
+      // ABRIR MODAL PARA NOME E ID
+      // ===============================
+      const modal = new ModalBuilder()
+        .setCustomId("modal_registro")
+        .setTitle("📝 Formulário de Registro");
+
+      const inputNome = new TextInputBuilder()
+        .setCustomId("nome_jogador")
+        .setLabel("Nome do Jogador")
+        .setPlaceholder("Ex: João Silva")
+        .setStyle(TextInputStyle.Short)
+        .setMinLength(2)
+        .setMaxLength(20)
+        .setRequired(true);
+
+      const inputId = new TextInputBuilder()
+        .setCustomId("id_jogador")
+        .setLabel("ID do Jogador")
+        .setPlaceholder("Ex: 12345")
+        .setStyle(TextInputStyle.Short)
+        .setMinLength(1)
+        .setMaxLength(15)
+        .setRequired(true);
+
+      const row1 = new ActionRowBuilder().addComponents(inputNome);
+      const row2 = new ActionRowBuilder().addComponents(inputId);
+
+      modal.addComponents(row1, row2);
+
+      await interaction.showModal(modal);
+
+    } catch (err) {
+      console.error("Erro no botão de registro:", err);
+      if (!interaction.replied && !interaction.deferred) {
+        interaction.reply({
+          content: "❌ Ocorreu um erro ao processar sua solicitação.",
+          ephemeral: true
+        }).catch(() => {});
+      }
+    }
+  }
+
+  // ===============================
+  // MODAL SUBMETIDO - MOSTRA SELECT MENU
+  // ===============================
+  if (interaction.isModalSubmit() && interaction.customId === "modal_registro") {
+    try {
+      const guild = interaction.guild;
+      if (!guild) return;
+
+      const nomeJogador = interaction.fields.getTextInputValue("nome_jogador").trim();
+      const idJogador = interaction.fields.getTextInputValue("id_jogador").trim();
+
+      // Validar campos
+      if (!nomeJogador || nomeJogador.length < 2) {
+        return interaction.reply({
+          content: "❌ Nome inválido. Deve ter pelo menos 2 caracteres.",
+          ephemeral: true
+        });
+      }
+
+      if (!idJogador || idJogador.length < 1) {
+        return interaction.reply({
+          content: "❌ ID inválido.",
+          ephemeral: true
+        });
+      }
+
+      // Salvar dados temporariamente
+      adicionarPendente(interaction.user.id, {
+        nome: nomeJogador,
+        idJogador: idJogador
+      });
+
+      // ===============================
       // CRIAR SELECT MENU DE GRUPOS
       // ===============================
       const selectMenu = new StringSelectMenuBuilder()
@@ -339,16 +484,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const row = new ActionRowBuilder().addComponents(selectMenu);
 
       await interaction.reply({
-        content: "📋 **Selecione o grupo ao qual você deseja pertencer:**",
+        content: `✅ Dados recebidos!\n\n**Nome:** ${nomeJogador}\n**ID:** ${idJogador}\n\n📋 **Agora selecione o grupo ao qual você deseja pertencer:**`,
         components: [row],
         ephemeral: true
       });
 
     } catch (err) {
-      console.error("Erro no botão de registro:", err);
-      if (!interaction.replied) {
+      console.error("Erro no modal:", err);
+      if (!interaction.replied && !interaction.deferred) {
         interaction.reply({
-          content: "❌ Ocorreu um erro ao processar sua solicitação.",
+          content: "❌ Ocorreu um erro ao processar seus dados.",
           ephemeral: true
         }).catch(() => {});
       }
@@ -373,6 +518,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
 
+      // Buscar dados pendentes
+      const pendente = obterPendente(interaction.user.id);
+      if (!pendente) {
+        return interaction.reply({
+          content: "❌ Dados não encontrados. Por favor, inicie o registro novamente.",
+          ephemeral: true
+        });
+      }
+
       const estrutura = await validarEstrutura(guild);
       if (!estrutura.canalLogs) {
         return interaction.reply({
@@ -392,11 +546,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
       // ===============================
       // ENVIAR SOLICITAÇÃO NO CANAL DE LOGS
       // ===============================
-      const solicitacao = criarSolicitacao(membro, grupoEscolhido);
+      const solicitacao = criarSolicitacao(
+        membro,
+        grupoEscolhido,
+        pendente.nome,
+        pendente.idJogador
+      );
       await estrutura.canalLogs.send(solicitacao);
 
       await interaction.update({
-        content: `✅ Sua solicitação para o grupo **${grupo.nome}** foi enviada!\n\nAguarde a aprovação da staff. Você receberá uma mensagem privada quando for aprovado.`,
+        content: `✅ Sua solicitação para o grupo **${grupo.nome}** foi enviada!\n\n**Nome:** ${pendente.nome}\n**ID:** ${pendente.idJogador}\n\nAguarde a aprovação da staff. Você receberá uma mensagem privada quando for aprovado.`,
         components: [],
         ephemeral: true
       });
@@ -406,6 +565,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
 📋 NOVA SOLICITAÇÃO DE REGISTRO
 👤 ${membro.user.tag}
 🆔 ${membro.id}
+🎮 Nome: ${pendente.nome}
+🔢 ID Jogador: ${pendente.idJogador}
 🏷️ Grupo: ${grupo.nome}
 ⏰ ${new Date().toLocaleString()}
 =================================
@@ -459,6 +620,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
 
+      // Buscar dados pendentes
+      const pendente = obterPendente(userId);
+      if (!pendente) {
+        return interaction.reply({
+          content: "❌ Dados do registro não encontrados.",
+          ephemeral: true
+        });
+      }
+
       const estrutura = await validarEstrutura(guild);
       if (!estrutura.cargoMorador) {
         return interaction.reply({
@@ -494,6 +664,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
 
+      // Verificar hierarquia para mudar nickname
+      if (membro.roles.highest.position >= guild.members.me.roles.highest.position) {
+        return interaction.reply({
+          content: "❌ Meu cargo está abaixo do cargo mais alto do usuário.",
+          ephemeral: true
+        });
+      }
+
       // ===============================
       // APROVAR REGISTRO
       // ===============================
@@ -501,14 +679,25 @@ client.on(Events.InteractionCreate, async (interaction) => {
         // Adicionar cargos
         await membro.roles.add([CONFIG.CARGO_MORADOR_ID, grupo.cargoId]);
 
+        // Mudar nickname
+        const novoNickname = gerarNickname(grupo.tag, pendente.nome, pendente.idJogador);
+        try {
+          await membro.setNickname(novoNickname);
+        } catch (err) {
+          console.error(`⚠️ Erro ao mudar nickname de ${membro.user.tag}:`, err);
+        }
+
         // Editar mensagem original
         const embedAprovado = new EmbedBuilder()
           .setColor("#00FF00")
           .setTitle("✅ Registro Aprovado")
           .setDescription(`
 **Usuário:** ${membro.user.tag}
-**ID:** ${membro.id}
+**ID Discord:** ${membro.id}
+**Nome do Jogador:** ${pendente.nome}
+**ID do Jogador:** ${pendente.idJogador}
 **Grupo:** ${grupo.emoji} ${grupo.nome}
+**Apelido Definido:** \`${novoNickname}\`
 **Aprovado por:** ${interaction.user.tag}
 **Data:** <t:${Math.floor(Date.now() / 1000)}:F>
 `)
@@ -543,6 +732,7 @@ Sua solicitação de registro foi **aprovada**!
 **Grupo:** ${grupo.emoji} ${grupo.nome}
 **Cargo Morador:** ✅ Adicionado
 **Cargo do Grupo:** ✅ Adicionado
+**Apelido:** \`${novoNickname}\`
 
 Agora você já pode acessar todos os canais do servidor.
 Seja bem-vindo(a)! 🏡
@@ -554,19 +744,25 @@ Seja bem-vindo(a)! 🏡
           console.log(`⚠️ Não foi possível enviar DM para ${membro.user.tag}`);
         });
 
+        // Remover dos pendentes
+        removerPendente(userId);
+
         console.log(`
 =================================
 ✅ REGISTRO APROVADO
 👤 ${membro.user.tag}
 🆔 ${membro.id}
+🎮 Nome: ${pendente.nome}
+🔢 ID: ${pendente.idJogador}
 🏷️ Grupo: ${grupo.nome}
+📛 Nickname: ${novoNickname}
 👮 Aprovado por: ${interaction.user.tag}
 ⏰ ${new Date().toLocaleString()}
 =================================
         `);
 
         await interaction.followUp({
-          content: `✅ Registro de ${membro.user.tag} aprovado com sucesso!`,
+          content: `✅ Registro de ${membro.user.tag} aprovado com sucesso!\nApelido definido: \`${novoNickname}\``,
           ephemeral: true
         });
       }
@@ -581,7 +777,9 @@ Seja bem-vindo(a)! 🏡
           .setTitle("❌ Registro Recusado")
           .setDescription(`
 **Usuário:** ${membro.user.tag}
-**ID:** ${membro.id}
+**ID Discord:** ${membro.id}
+**Nome do Jogador:** ${pendente.nome}
+**ID do Jogador:** ${pendente.idJogador}
 **Grupo:** ${grupo.emoji} ${grupo.nome}
 **Recusado por:** ${interaction.user.tag}
 **Data:** <t:${Math.floor(Date.now() / 1000)}:F>
@@ -615,6 +813,8 @@ Olá ${membro.user.username} 👋
 Infelizmente sua solicitação de registro foi **recusada**.
 
 **Grupo:** ${grupo.emoji} ${grupo.nome}
+**Nome:** ${pendente.nome}
+**ID:** ${pendente.idJogador}
 
 Se você acredita que houve um erro, entre em contato com a staff do servidor.
 `)
@@ -625,11 +825,16 @@ Se você acredita que houve um erro, entre em contato com a staff do servidor.
           console.log(`⚠️ Não foi possível enviar DM para ${membro.user.tag}`);
         });
 
+        // Remover dos pendentes
+        removerPendente(userId);
+
         console.log(`
 =================================
 ❌ REGISTRO RECUSADO
 👤 ${membro.user.tag}
 🆔 ${membro.id}
+🎮 Nome: ${pendente.nome}
+🔢 ID: ${pendente.idJogador}
 🏷️ Grupo: ${grupo.nome}
 👮 Recusado por: ${interaction.user.tag}
 ⏰ ${new Date().toLocaleString()}
