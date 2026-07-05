@@ -14,8 +14,6 @@
  *  - Proteção Anti-Spam configurada para 30 segundos.
  * ============================================================================
  */
-
-require('dotenv').config();
 const {
     Client,
     GatewayIntentBits,
@@ -33,7 +31,6 @@ const {
 const fs = require("fs");
 
 const TOKEN = process.env.TOKEN;
-
 // ===============================
 // CONFIGURAÇÃO DO SISTEMA
 // ===============================
