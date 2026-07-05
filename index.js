@@ -17,6 +17,7 @@
  * ============================================================================
  */
 
+require('dotenv').config();
 const {
     Client,
     GatewayIntentBits,
@@ -27,13 +28,16 @@ const {
     ActionRowBuilder,
     StringSelectMenuBuilder,
     StringSelectMenuOptionBuilder,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle,
     Events,
     PermissionsBitField
 } = require("discord.js");
 
 const fs = require("fs");
 
-const TOKEN = process.env.TOKEN;
+const TOKEN = process.env.TOKEN || "MTUxNT...SEU_TOKEN_DO_BOT...aBcD1234";
 
 // ===============================
 // CONFIGURAÇÃO DO SISTEMA
@@ -314,13 +318,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
             const modal = new ModalBuilder()
                 .setCustomId("modal_reg_" + grupoEscolhido.roleId)
-                .setTitle("📝 Cidadania: " + grupoEscolhido.name.substring(0, 20));
+                .setTitle("Registro - " + grupoEscolhido.name.replace(/[^a-zA-Z0-9 -]/g, "").trim().substring(0, 28));
 
             const inputNome = new TextInputBuilder()
                 .setCustomId("input_nome")
                 .setLabel("Seu Nome no Jogo / Personagem")
                 .setPlaceholder("Ex: Henrique Souza")
-                .setStyle(TextInputStyle.Short)
+                .setStyle(1) // 1 = Short (evita incompatibilidades de enum)
                 .setRequired(true)
                 .setMinLength(2)
                 .setMaxLength(20);
@@ -329,7 +333,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 .setCustomId("input_id")
                 .setLabel("Seu ID no Jogo / Cidade")
                 .setPlaceholder("Ex: 15420")
-                .setStyle(TextInputStyle.Short)
+                .setStyle(1) // 1 = Short
                 .setRequired(true)
                 .setMinLength(1)
                 .setMaxLength(10);
