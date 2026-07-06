@@ -2,21 +2,6 @@
  * ============================================================================
  * BOT AUTOMÁTICO DE REGISTRO DISCORD — FIVEZ & LUMENFALL CITY (ES MODULES)
  * ============================================================================
- * 
- * Funcionalidades implementadas:
- *  - Painel persistente que se auto-atualiza ao reiniciar (panel.json).
- *  - Botão interativo de "Realizar Registro" no painel.
- *  - Menu de seleção para escolha de grupos (Amigos, Família, FiveZ Hunters, Lumenfall City).
- *  - Formulário Modal (Popup) obrigatório solicitando Nome, ID e Quem Contratou.
- *  - Formatação automática de Apelido com Tag do Grupo + Nome + ID.
- *  - Solicitação enviada ao Canal de Logs para análise da Administração.
- *  - Botões de aprovação e recusa para Moderadores (✅ Aprovar / ❌ Recusar).
- *  - Atribuição automática do cargo do grupo escolhido + alteração de Apelido.
- *  - Envio de Mensagem Direta (DM) notificando o usuário sobre o resultado.
- *  - Proteção Anti-Spam configurada para 30 segundos.
- *  - Comando de Administração no chat (!limparcargos ou !resetgrupos) com suporte completo a MessageContent.
- *  - Limpeza automática de não-registrados (Autokick) após 3 dias da data de entrada.
- * ============================================================================
  */
 
 import dotenv from 'dotenv';
@@ -55,7 +40,7 @@ const CONFIG = {
 
     EMBED_COLOR: "#2ECC71",
     FOOTER: "FiveZ & Lumenfall • Sistema Automático",
-    SPAM_COOLDOWN_MS: 30000, // 30 segundos em milissegundos
+    SPAM_COOLDOWN_MS: 30000, // 30 segundos de cooldown
     FORMATO_APELIDO: "{TAG} {NOME} | {ID}",
     PERMITIR_RECADASTRO: true,
 
@@ -92,14 +77,9 @@ const CONFIG = {
 };
 
 const PANEL_FILE = "./panel.json";
-
-// Map para controle do Anti-Spam de 30s (UserID -> Timestamp)
 const cooldown = new Map();
 
-// ===============================
-// INICIALIZAÇÃO DO CLIENTE DISCORD
-// ===============================
-
+// Inicialização do cliente Discord
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -114,18 +94,12 @@ const client = new Client({
     ]
 });
 
-// ===============================
-// GERENCIAMENTO DE PERSISTÊNCIA DO PAINEL (JSON)
-// ===============================
-
+// Salvamento persistente do painel de registro
 function salvarPainel(messageId) {
     try {
-        fs.writeFileSync(
-            PANEL_FILE,
-            JSON.stringify({ messageId: messageId, updatedAt: new Date().toISOString() }, null, 4)
-        );
+        fs.writeFileSync(PANEL_FILE, JSON.stringify({ messageId, updatedAt: new Date().toISOString() }, null, 4));
     } catch (err) {
-        console.error("⚠️ Erro ao salvar o arquivo do painel (panel.json):", err);
+        console.error("⚠️ Erro ao salvar o painel:", err);
     }
 }
 
@@ -138,49 +112,19 @@ function carregarPainel() {
     }
 }
 
-// ===============================
-// VALIDAÇÃO DE ESTRUTURA DO SERVIDOR
-// ===============================
-
 async function validarEstrutura(guild) {
     const canalRegistro = await guild.channels.fetch(CONFIG.CANAL_REGISTRO_ID).catch(() => null);
     const canalLogs = await guild.channels.fetch(CONFIG.CANAL_LOGS_ID).catch(() => null);
     const cargoMorador = await guild.roles.fetch(CONFIG.CARGO_MORADOR_ID).catch(() => null);
-
-    if (!canalRegistro) console.log("❌ [ERRO] Canal de Registro (" + CONFIG.CANAL_REGISTRO_ID + ") não encontrado.");
-    if (!canalLogs) console.log("❌ [ERRO] Canal de Logs (" + CONFIG.CANAL_LOGS_ID + ") não encontrado.");
-    if (!cargoMorador) console.log("❌ [ERRO] Cargo de Morador (" + CONFIG.CARGO_MORADOR_ID + ") não encontrado.");
-
     return { canalRegistro, canalLogs, cargoMorador };
 }
-
-// ===============================
-// CONSTRUÇÃO DO PAINEL PRINCIPAL
-// ===============================
 
 function criarPainel(guild) {
     const embed = new EmbedBuilder()
         .setColor(CONFIG.EMBED_COLOR)
-        .setAuthor({
-            name: guild.name,
-            iconURL: guild.iconURL({ dynamic: true }) || undefined
-        })
+        .setAuthor({ name: guild.name, iconURL: guild.iconURL({ dynamic: true }) || undefined })
         .setTitle("🏡 Sistema de Registro — Cidadania & Grupos")
-        .setDescription(`# Seja bem-vindo à nossa Comunidade!
-
-📢 **AVISO IMPORTANTE PARA TODOS (@everyone):**
-> ⚠️ **PRAZO LIMITE DE REGISTRO:** Todo membro que entrar no servidor tem um prazo máximo de **3 dias** para realizar o registro de cidadania.
-> 🚫 Se você passar de **3 dias** no servidor sem realizar o seu registro (ficando sem os cargos dos grupos), você será **kickado automaticamente** pelo sistema!
-
-Para desbloquear todos os canais de voz e texto do servidor e registrar sua cidadania, selecione seu grupo abaixo.
-
-### 🎁 Benefícios ao registrar:
-> ✅ **Cargo do seu Grupo escolhido**
-> 🏷️ **Apelido Atualizado:** Com a tag da facção, seu Nome, ID e quem te contratou
-> 🔓 **Liberação imediata** dos canais e categorias do servidor
-> 🎉 **Acesso completo** a eventos, caças e roleplay da cidade
-
-👇 *Clique no botão abaixo, escolha seu grupo e preencha o formulário com seu Nome no Jogo, ID e quem te contratou!*`)
+        .setDescription(`# Seja bem-vindo à nossa Comunidade!\n\nPara desbloquear todos os canais de voz e texto do servidor e registrar sua cidadania, selecione seu grupo abaixo.\n\n### 🎁 Benefícios ao registrar:\n> ✅ **Cargo Morador** + Cargo do seu Grupo escolhido\n> 🏷️ **Apelido Atualizado Automaticamente:** Com a tag da facção, seu Nome e ID\n> 🔓 **Liberação imediata** dos canais e categorias do servidor\n> 🎉 **Acesso completo** a eventos e roleplay da cidade\n\n👇 *Clique no botão abaixo, escolha seu grupo e preencha o formulário!*`)
         .setThumbnail(guild.iconURL({ dynamic: true }) || null)
         .setFooter({ text: CONFIG.FOOTER })
         .setTimestamp();
@@ -192,569 +136,239 @@ Para desbloquear todos os canais de voz e texto do servidor e registrar sua cida
         .setStyle(ButtonStyle.Success);
 
     const row = new ActionRowBuilder().addComponents(botao);
-
-    return {
-        content: "@everyone",
-        embeds: [embed],
-        components: [row]
-    };
+    return { embeds: [embed], components: [row] };
 }
-
-// ===============================
-// ENVIAR / ATUALIZAR PAINEL DE REGISTRO
-// ===============================
 
 async function enviarPainel(guild, canal) {
     if (!canal) return;
-
     const painel = criarPainel(guild);
     const salvo = carregarPainel();
 
     if (salvo && salvo.messageId) {
         try {
-            const message = await canal.messages.fetch(salvo.messageId);
-            await message.edit(painel);
-            console.log("✅ Painel de registro existente foi atualizado automaticamente.");
+            const mensagem = await canal.messages.fetch(salvo.messageId);
+            await mensagem.edit(painel);
+            console.log("✅ Painel atualizado com sucesso!");
             return;
         } catch (e) {
-            console.log("ℹ️ Mensagem antiga do painel não foi encontrada. Criando uma nova mensagem...");
+            console.log("ℹ️ Criando novo painel...");
         }
     }
 
     const novaMensagem = await canal.send(painel);
     salvarPainel(novaMensagem.id);
-    console.log("✅ Novo painel de registro criado e salvo em panel.json. ID: " + novaMensagem.id);
 }
-
-// ===============================
-// FUNÇÃO DE LIMPEZA AUTOMÁTICA (AUTOKICK 3 DIAS)
-// ===============================
-
-async function verificarEKickarNaoRegistrados(guild) {
-    try {
-        console.log("⏳ [AUTOKICK] Iniciando verificação de membros não registrados...");
-        
-        const membros = await guild.members.fetch();
-        const agora = Date.now();
-        const tresDiasMs = 3 * 24 * 60 * 60 * 1000; // 3 dias em milissegundos
-        
-        const cargosRelacionados = CONFIG.GRUPOS.map(g => g.roleId);
-        let countKicked = 0;
-        
-        for (const [id, member] of membros) {
-            if (member.user.bot) continue;
-            if (member.id === guild.ownerId) continue;
-            if (member.permissions.has(PermissionsBitField.Flags.Administrator) || member.permissions.has(PermissionsBitField.Flags.ManageRoles)) continue;
-            
-            const temCargoRelacionado = member.roles.cache.some(role => cargosRelacionados.includes(role.id));
-            
-            if (!temCargoRelacionado) {
-                const tempoNoServidor = agora - member.joinedTimestamp;
-                if (tempoNoServidor > tresDiasMs) {
-                    console.log(`⚠️ [AUTOKICK] Kickando membro não registrado: ${member.user.tag} (${member.id})`);
-                    
-                    await member.send({
-                        content: `⚠️ **Olá, você foi removido(a) do servidor ${guild.name} por não realizar o seu registro dentro do prazo limite de 3 dias.**\n\nCaso queira retornar e se registrar, você poderá entrar novamente e realizar o registro imediatamente no canal correspondente.`
-                    }).catch(() => console.log(`Aviso: DM fechada para ${member.user.tag}`));
-                    
-                    await member.kick("Não se registrou no prazo de 3 dias.").catch(err => {
-                        console.error(`Falha ao kickar ${member.user.tag}:`, err);
-                    });
-                    
-                    countKicked++;
-                }
-            }
-        }
-        
-        console.log(`✅ [AUTOKICK] Verificação concluída. ${countKicked} membros kickados.`);
-        
-        if (countKicked > 0) {
-            const canalLogs = await guild.channels.fetch(CONFIG.CANAL_LOGS_ID).catch(() => null);
-            if (canalLogs) {
-                const embedAutokick = new EmbedBuilder()
-                    .setColor("#E74C3C")
-                    .setTitle("🛡️ Limpeza Automática — Autokick de Não Registrados")
-                    .setDescription(`O sistema removeu **${countKicked}** membros que estavam no servidor há mais de 3 dias sem realizar o registro ou possuir os cargos correspondentes.`)
-                    .setTimestamp();
-                await canalLogs.send({ embeds: [embedAutokick] }).catch(() => {});
-            }
-        }
-    } catch (err) {
-        console.error("Erro na rotina de autokick:", err);
-    }
-}
-
-// ===============================
-// EVENTO: BOT ONLINE
-// ===============================
 
 client.once(Events.ClientReady, async () => {
     console.log("==================================================");
-    console.log("✅ BOT ONLINE E CONECTADO: " + client.user.tag);
-    console.log("🛡️ Proteção Anti-Spam: " + (CONFIG.SPAM_COOLDOWN_MS / 1000) + " segundos");
-    console.log("📢 ID Canal de Logs: " + CONFIG.CANAL_LOGS_ID);
+    console.log("✅ BOT ONLINE NO RAILWAY: " + client.user.tag);
     console.log("==================================================");
 
-    const guild = client.guilds.cache.get("1456655598031601727") || client.guilds.cache.first();
-    if (!guild) {
-        return console.log("❌ O bot não está em nenhum servidor no momento. Use o link de convite do Bot.");
-    }
+    const guild = client.guilds.cache.first();
+    if (!guild) return;
 
     const estrutura = await validarEstrutura(guild);
     if (estrutura.canalRegistro) {
         await enviarPainel(guild, estrutura.canalRegistro);
     }
-
-    // Executa o autokick ao iniciar o bot
-    await verificarEKickarNaoRegistrados(guild);
-
-    // Executa o autokick a cada 1 hora
-    setInterval(async () => {
-        await verificarEKickarNaoRegistrados(guild);
-    }, 3600000);
 });
 
-// ===============================
-// EVENTO: INTERAÇÕES COM BOTÕES E MENUS
-// ===============================
-
+// Eventos de interação e Botões/Menus
 client.on(Events.InteractionCreate, async (interaction) => {
     const guild = interaction.guild;
     if (!guild) return;
 
-    // ------------------------------------------------------------------------
-    // ETAPA 1: CLIQUE NO BOTÃO "REALIZAR REGISTRO" -> ABRE MENU DE ESCOLHA
-    // ------------------------------------------------------------------------
+    // Abrir o menu de registro
     if (interaction.isButton() && interaction.customId === "abrir_menu_registro") {
-        try {
-            // Verificar Anti-Spam (30 segundos)
-            if (cooldown.has(interaction.user.id)) {
-                const tempoRestante = Math.ceil((cooldown.get(interaction.user.id) - Date.now()) / 1000);
-                if (tempoRestante > 0) {
-                    return interaction.reply({
-                        content: "⏳ **Proteção Anti-Spam:** Por favor, aguarde **" + tempoRestante + " segundos** para utilizar o sistema de registro novamente.",
-                        ephemeral: true
-                    });
-                } else {
-                    cooldown.delete(interaction.user.id);
-                }
-            }
-
-            const membro = await guild.members.fetch(interaction.user.id).catch(() => null);
-            if (!membro) {
-                return interaction.reply({ content: "❌ Erro ao carregar seu perfil no servidor.", ephemeral: true });
-            }
-
-            // Se recadastro não for permitido e usuário já tiver cargo morador, bloquear
-            if (!CONFIG.PERMITIR_RECADASTRO && membro.roles.cache.has(CONFIG.CARGO_MORADOR_ID)) {
+        if (cooldown.has(interaction.user.id)) {
+            const tempoRestante = Math.ceil((cooldown.get(interaction.user.id) - Date.now()) / 1000);
+            if (tempoRestante > 0) {
                 return interaction.reply({
-                    content: "✅ **Você já possui o cargo Morador no servidor!** Seu registro já foi realizado anteriormente.",
+                    content: `⏳ **Anti-Spam:** Aguarde ${tempoRestante} segundos antes de tentar novamente.`,
                     ephemeral: true
                 });
             }
-
-            // Criar menu de seleção com os grupos (Amigos, Família, FiveZ Hunters, Lumenfall City)
-            const selectMenu = new StringSelectMenuBuilder()
-                .setCustomId("select_grupo_registro")
-                .setPlaceholder("🎯 Selecione seu Grupo / Facção na lista...");
-
-            CONFIG.GRUPOS.forEach(g => {
-                selectMenu.addOptions(
-                    new StringSelectMenuOptionBuilder()
-                        .setLabel(g.name + " (" + (g.tag || '|TAG|') + ")")
-                        .setValue(g.roleId)
-                        .setEmoji(g.emoji)
-                        .setDescription(g.description ? g.description.substring(0, 100) : "Ingressar no grupo " + g.name)
-                );
-            });
-
-            const row = new ActionRowBuilder().addComponents(selectMenu);
-
-            return interaction.reply({
-                content: "🏡 **Processo de Cidadania & Apelido:**\nEscolha abaixo qual grupo ou família você deseja participar no servidor.\n*Em seguida, você preencherá seu Nome no Jogo e ID para padronização do seu apelido!*",
-                components: [row],
-                ephemeral: true
-            });
-        } catch (err) {
-            console.error("Erro no botão de registro:", err);
-            return interaction.reply({ content: "❌ Ocorreu um erro ao abrir o menu de registro.", ephemeral: true }).catch(() => {});
         }
+
+        const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId("select_grupo_registro")
+            .setPlaceholder("🎯 Selecione seu Grupo / Facção na lista...");
+
+        CONFIG.GRUPOS.forEach(g => {
+            selectMenu.addOptions(
+                new StringSelectMenuOptionBuilder()
+                    .setLabel(`${g.name} (${g.tag})`)
+                    .setValue(g.roleId)
+                    .setEmoji(g.emoji)
+                    .setDescription(g.description || `Ingressar no grupo ${g.name}`)
+            );
+        });
+
+        const row = new ActionRowBuilder().addComponents(selectMenu);
+        return interaction.reply({
+            content: "🏡 **Escolha seu grupo abaixo para iniciar o registro:**",
+            components: [row],
+            ephemeral: true
+        });
     }
 
-    // ------------------------------------------------------------------------
-    // ETAPA 2: USUÁRIO SELECIONOU SEU GRUPO NO MENU -> ABRE FORMULÁRIO MODAL
-    // ------------------------------------------------------------------------
+    // Formulário popup (Modal)
     if (interaction.isStringSelectMenu() && interaction.customId === "select_grupo_registro") {
-        try {
-            const roleIdEscolhido = interaction.values[0];
-            const grupoEscolhido = CONFIG.GRUPOS.find(g => g.roleId === roleIdEscolhido) || {
-                name: "Grupo Desconhecido",
-                roleId: roleIdEscolhido,
-                emoji: "👥",
-                tag: "|TAG|"
-            };
+        const roleIdEscolhido = interaction.values[0];
+        const grupoEscolhido = CONFIG.GRUPOS.find(g => g.roleId === roleIdEscolhido);
 
-            const modal = new ModalBuilder()
-                .setCustomId("modal_reg_" + grupoEscolhido.roleId)
-                .setTitle("Registro - " + grupoEscolhido.name.replace(/[^a-zA-Z0-9 -]/g, "").trim().substring(0, 28));
+        const modal = new ModalBuilder()
+            .setCustomId("modal_reg_" + roleIdEscolhido)
+            .setTitle("Registro - " + grupoEscolhido.name);
 
-            const inputNome = new TextInputBuilder()
-                .setCustomId("input_nome")
-                .setLabel("Seu Nome no Jogo / Personagem")
-                .setPlaceholder("Ex: Henrique Souza")
-                .setStyle(TextInputStyle.Short)
-                .setRequired(true)
-                .setMinLength(2)
-                .setMaxLength(20);
+        const inputNome = new TextInputBuilder()
+            .setCustomId("input_nome")
+            .setLabel("Seu Nome no Jogo / Personagem")
+            .setPlaceholder("Ex: Henrique Souza")
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
 
-            const inputId = new TextInputBuilder()
-                .setCustomId("input_id")
-                .setLabel("Seu ID no Jogo / Cidade")
-                .setPlaceholder("Ex: 15420")
-                .setStyle(TextInputStyle.Short)
-                .setRequired(true)
-                .setMinLength(1)
-                .setMaxLength(10);
+        const inputId = new TextInputBuilder()
+            .setCustomId("input_id")
+            .setLabel("Seu ID no Jogo / Cidade")
+            .setPlaceholder("Ex: 15420")
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
 
-            const inputContratou = new TextInputBuilder()
-                .setCustomId("input_contratou")
-                .setLabel("Quem te contratou?")
-                .setPlaceholder("Ex: Henrique Souza")
-                .setStyle(TextInputStyle.Short)
-                .setRequired(true)
-                .setMinLength(2)
-                .setMaxLength(30);
+        const inputContratou = new TextInputBuilder()
+            .setCustomId("input_contratou")
+            .setLabel("Quem te contratou?")
+            .setPlaceholder("Ex: Henrique Souza")
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
 
-            const row1 = new ActionRowBuilder().addComponents(inputNome);
-            const row2 = new ActionRowBuilder().addComponents(inputId);
-            const row3 = new ActionRowBuilder().addComponents(inputContratou);
-            modal.addComponents(row1, row2, row3);
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(inputNome),
+            new ActionRowBuilder().addComponents(inputId),
+            new ActionRowBuilder().addComponents(inputContratou)
+        );
 
-            await interaction.showModal(modal);
-        } catch (err) {
-            console.error("Erro ao abrir modal:", err);
-            return interaction.reply({ content: "❌ Ocorreu um erro ao abrir o formulário.", ephemeral: true }).catch(() => {});
-        }
+        await interaction.showModal(modal);
     }
 
-    // ------------------------------------------------------------------------
-    // ETAPA 2.5: USUÁRIO PREENCHEU O MODAL -> ENVIA PARA LOGS DOS ADMINS
-    // ------------------------------------------------------------------------
+    // Enviar formulário para logs
     if (interaction.isModalSubmit() && interaction.customId.startsWith("modal_reg_")) {
-        try {
-            const roleIdEscolhido = interaction.customId.replace("modal_reg_", "");
-            const grupoEscolhido = CONFIG.GRUPOS.find(g => g.roleId === roleIdEscolhido) || {
-                name: "Grupo Desconhecido",
-                roleId: roleIdEscolhido,
-                emoji: "👥",
-                tag: "|TAG|"
-            };
+        const roleIdEscolhido = interaction.customId.replace("modal_reg_", "");
+        const grupoEscolhido = CONFIG.GRUPOS.find(g => g.roleId === roleIdEscolhido);
 
-            const membro = await guild.members.fetch(interaction.user.id).catch(() => null);
-            if (!membro) return;
+        const nome = interaction.fields.getTextInputValue("input_nome").trim();
+        const idJogo = interaction.fields.getTextInputValue("input_id").trim();
+        const quemContratou = interaction.fields.getTextInputValue("input_contratou").trim();
+        let novoApelido = CONFIG.FORMATO_APELIDO.replace("{TAG}", grupoEscolhido.tag).replace("{NOME}", nome).replace("{ID}", idJogo);
 
-            const nomePersonagem = interaction.fields.getTextInputValue("input_nome").trim();
-            const idJogo = interaction.fields.getTextInputValue("input_id").trim();
-            const quemContratou = interaction.fields.getTextInputValue("input_contratou").trim();
+        if (novoApelido.length > 32) novoApelido = novoApelido.substring(0, 32);
 
-            // Formatar o apelido: ex |AMG| Henrique | 1542
-            let novoApelido = CONFIG.FORMATO_APELIDO
-                .replace("{TAG}", grupoEscolhido.tag || "|TAG|")
-                .replace("{NOME}", nomePersonagem)
-                .replace("{ID}", idJogo);
+        cooldown.set(interaction.user.id, Date.now() + CONFIG.SPAM_COOLDOWN_MS);
+        setTimeout(() => cooldown.delete(interaction.user.id), CONFIG.SPAM_COOLDOWN_MS);
 
-            if (novoApelido.length > 32) {
-                novoApelido = novoApelido.substring(0, 32);
-            }
+        const canalLogs = await guild.channels.fetch(CONFIG.CANAL_LOGS_ID).catch(() => null);
+        if (!canalLogs) return interaction.reply({ content: "❌ Canal de logs de registros não encontrado.", ephemeral: true });
 
-            // Ativar cooldown de 30s
-            cooldown.set(interaction.user.id, Date.now() + CONFIG.SPAM_COOLDOWN_MS);
-            setTimeout(() => {
-                cooldown.delete(interaction.user.id);
-            }, CONFIG.SPAM_COOLDOWN_MS);
+        const embedLog = new EmbedBuilder()
+            .setColor("#3498DB")
+            .setTitle("📥 Nova Solicitação de Registro & Apelido")
+            .addFields(
+                { name: "👤 Membro", value: `<@${interaction.user.id}> (${interaction.user.tag})`, inline: true },
+                { name: "🎯 Grupo", value: `${grupoEscolhido.emoji} **${grupoEscolhido.name}**`, inline: true },
+                { name: "📝 Nome", value: nome, inline: true },
+                { name: "🔢 ID", value: idJogo, inline: true },
+                { name: "🤝 Quem te Contratou", value: `**${quemContratou}**`, inline: false },
+                { name: "🏷️ Apelido Solicitado", value: `\`${novoApelido}\``, inline: false }
+            )
+            .setTimestamp();
 
-            // Enviar solicitação ao canal de logs
-            const canalLogs = await guild.channels.fetch(CONFIG.CANAL_LOGS_ID).catch(() => null);
-            if (!canalLogs) {
-                return interaction.reply({
-                    content: "❌ **Erro no Sistema:** O canal de logs da administração não foi encontrado no servidor. Avise um Administrador!",
-                    ephemeral: true
-                });
-            }
+        const btnAprovar = new ButtonBuilder().setCustomId(`aprovar_reg_${interaction.user.id}_${roleIdEscolhido}`).setEmoji("✅").setLabel("Aprovar").setStyle(ButtonStyle.Success);
+        const btnRecusar = new ButtonBuilder().setCustomId(`recusar_reg_${interaction.user.id}_${roleIdEscolhido}`).setEmoji("❌").setLabel("Recusar").setStyle(ButtonStyle.Danger);
 
-            const embedLog = new EmbedBuilder()
-                .setColor("#3498DB")
-                .setTitle("📥 Nova Solicitação de Registro & Apelido")
-                .setDescription("O membro preencheu o formulário de cidadania e aguarda aprovação da Administração.")
-                .addFields(
-                    { name: "👤 Usuário Discord", value: "<@" + membro.id + "> (" + membro.user.tag + ")", inline: true },
-                    { name: "🆔 Discord ID", value: "`" + membro.id + "`", inline: true },
-                    { name: "🎯 Grupo Escolhido", value: "" + grupoEscolhido.emoji + " **" + grupoEscolhido.name + "**\n(Tag: `" + (grupoEscolhido.tag || '|TAG|') + "`)", inline: false },
-                    { name: "📝 Nome no Jogo", value: "**" + nomePersonagem + "**", inline: true },
-                    { name: "🔢 ID no Jogo", value: "**" + idJogo + "**", inline: true },
-                    { name: "🤝 Quem te Contratou", value: "**" + quemContratou + "**", inline: false },
-                    { name: "🏷️ Novo Apelido (Após Approvar)", value: "`" + novoApelido + "`", inline: false },
-                    { name: "⏰ Data da Solicitação", value: "<t:" + Math.floor(Date.now() / 1000) + ":F>", inline: false }
-                )
-                .setThumbnail(membro.user.displayAvatarURL({ dynamic: true }))
-                .setFooter({ text: CONFIG.FOOTER })
-                .setTimestamp();
+        await canalLogs.send({ embeds: [embedLog], components: [new ActionRowBuilder().addComponents(btnAprovar, btnRecusar)] });
 
-            // Botões de Aprovação / Recusa para os Admins
-            const btnAprovar = new ButtonBuilder()
-                .setCustomId("aprovar_reg_" + membro.id + "_" + grupoEscolhido.roleId)
-                .setEmoji("✅")
-                .setLabel("Aprovar Registro")
-                .setStyle(ButtonStyle.Success);
-
-            const btnRecusar = new ButtonBuilder()
-                .setCustomId("recusar_reg_" + membro.id + "_" + grupoEscolhido.roleId)
-                .setEmoji("❌")
-                .setLabel("Recusar")
-                .setStyle(ButtonStyle.Danger);
-
-            const rowAdmin = new ActionRowBuilder().addComponents(btnAprovar, btnRecusar);
-
-            await canalLogs.send({
-                embeds: [embedLog],
-                components: [rowAdmin]
-            });
-
-            console.log("📥 Solicitação com formulário enviada: " + membro.user.tag + " -> Apelido: " + novoApelido);
-
-            return interaction.reply({
-                content: "✅ **Formulário de Registro Enviado com Sucesso!**\n\nSua solicitação para o grupo **" + grupoEscolhido.emoji + " " + grupoEscolhido.name + "** com o novo apelido **`" + novoApelido + "`** foi encaminhada para a equipe de Administração.\nAssim que for aprovada, seus cargos serão adicionados e seu apelido alterado automaticamente!",
-                ephemeral: true
-            });
-
-        } catch (err) {
-            console.error("Erro no formulário de registro:", err);
-            return interaction.reply({ content: "❌ Ocorreu um erro ao enviar seu formulário.", ephemeral: true }).catch(() => {});
-        }
+        return interaction.reply({ content: "✅ **Solicitação de registro enviada à administração!** Por favor, aguarde a aprovação.", ephemeral: true });
     }
 
-    // ------------------------------------------------------------------------
-    // ETAPA 3: ADMIN CLICOU EM "✅ APROVAR" OU "❌ RECUSAR" NO CANAL DE LOGS
-    // ------------------------------------------------------------------------
+    // Ações do Moderador (Aprovar / Recusar)
     if (interaction.isButton() && (interaction.customId.startsWith("aprovar_reg_") || interaction.customId.startsWith("recusar_reg_"))) {
-        try {
-            // Verificar permissão de gerenciar cargos ou adm
-            if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageRoles) && !interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-                return interaction.reply({
-                    content: "❌ Você não possui permissão de **Gerenciar Cargos** ou **Administrador** para avaliar registros.",
-                    ephemeral: true
-                });
+        if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageRoles) && !interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            return interaction.reply({ content: "❌ Você não tem permissão para gerenciar registros.", ephemeral: true });
+        }
+
+        const partes = interaction.customId.split("_");
+        const acao = partes[0];
+        const alvoUserId = partes[2];
+        const alvoRoleId = partes[3];
+
+        const membroAlvo = await guild.members.fetch(alvoUserId).catch(() => null);
+        const grupo = CONFIG.GRUPOS.find(g => g.roleId === alvoRoleId);
+
+        if (acao === "aprovar") {
+            if (!membroAlvo) return interaction.reply({ content: "⚠️ Membro não está no servidor.", ephemeral: true });
+
+            const embedOriginal = interaction.message.embeds[0];
+            const campoApelido = embedOriginal.fields.find(f => f.name.includes("Apelido"));
+            const novoApelido = campoApelido ? campoApelido.value.replace(/[`]/g, "").trim() : null;
+
+            // Atribuir cargos
+            await membroAlvo.roles.add([CONFIG.CARGO_MORADOR_ID, alvoRoleId]).catch(err => {
+                throw new Error("Coloque meu cargo acima dos cargos que preciso atribuir nas configurações!");
+            });
+
+            // Mudar Apelido
+            if (novoApelido && membroAlvo.id !== guild.ownerId) {
+                await membroAlvo.setNickname(novoApelido).catch(() => {});
             }
 
-            const partes = interaction.customId.split("_");
-            const acao = partes[0]; // "aprovar" ou "recusar"
-            const alvoUserId = partes[2];
-            const alvoRoleId = partes[3];
+            await interaction.update({
+                embeds: [EmbedBuilder.from(embedOriginal).setColor("#2ECC71").setTitle("✅ Registro Aprovado!")],
+                components: []
+            });
 
-            const membroAlvo = await guild.members.fetch(alvoUserId).catch(() => null);
-            const grupoInfo = CONFIG.GRUPOS.find(g => g.roleId === alvoRoleId) || { name: "Grupo (" + alvoRoleId + ")", emoji: "✅", tag: "|TAG|" };
-
-            // ==========================================
-            // FLUXO: APROVAÇÃO ✅
-            // ==========================================
-            if (acao === "aprovar") {
-                if (!membroAlvo) {
-                    return interaction.reply({ content: "⚠️ O usuário não está mais no servidor ou não pôde ser encontrado.", ephemeral: true });
-                }
-
-                // Verificar hierarquia de cargos do bot
-                const highestRole = guild.members.me.roles.highest;
-                if (highestRole.position <= 1) {
-                    return interaction.reply({ content: "❌ O meu cargo no servidor precisa estar ACIMA dos cargos Morador e Grupos para que eu possa adicioná-los!", ephemeral: true });
-                }
-
-                // Ler o apelido formatado do campo da log
-                const embedAtual = interaction.message.embeds[0];
-                const campoApelido = embedAtual.fields.find(f => f.name.includes("Novo Apelido"));
-                const novoApelido = campoApelido ? campoApelido.value.replace(/[`]/g, "").trim() : null;
-
-                // 1. Remover todos os cargos de grupos/facções antigos para não acumular tags/cargos!
-                const todosGruposIds = CONFIG.GRUPOS.map(g => g.roleId);
-                const cargosRemover = membroAlvo.roles.cache.filter(r => todosGruposIds.includes(r.id) && r.id !== alvoRoleId);
-                if (cargosRemover.size > 0) {
-                    await membroAlvo.roles.remove(cargosRemover).catch(() => console.log("Aviso: Sem permissão para remover cargo antigo do grupo"));
-                }
-
-                // 2. Adicionar apenas o Cargo do Grupo escolhido que foi solicitado
-                const cargosParaAdicionar = [];
-                if (alvoRoleId) {
-                    cargosParaAdicionar.push(alvoRoleId);
-                }
-
-                await membroAlvo.roles.add(cargosParaAdicionar).catch(err => {
-                    throw new Error("Erro ao atribuir cargos no Discord: verifique se o cargo do Bot está no topo da hierarquia!");
-                });
-
-                // Alterar Apelido (Nickname) do membro no servidor
-                let apelidoAlteradoMsg = "";
-                if (novoApelido && membroAlvo.id !== guild.ownerId) {
-                    await membroAlvo.setNickname(novoApelido).then(() => {
-                        apelidoAlteradoMsg = "\n> 🏷️ **Apelido alterado para:** `" + novoApelido + "`";
-                        console.log("✅ Apelido de " + membroAlvo.user.tag + " alterado para: " + novoApelido);
-                    }).catch(err => {
-                        apelidoAlteradoMsg = "\n> ⚠️ *Não foi possível alterar seu apelido automaticamente (cargo do bot ou dono do servidor).*";
-                        console.log("⚠️ Aviso: Sem permissão para alterar apelido de " + membroAlvo.user.tag);
-                    });
-                } else if (membroAlvo.id === guild.ownerId) {
-                    apelidoAlteradoMsg = "\n> ℹ️ *Apelido mantido (O Discord impede bots de alterar o apelido do Dono do Servidor).*";
-                }
-
-                // Atualizar a embed da log no canal
-                const embedAprovada = EmbedBuilder.from(interaction.message.embeds[0])
-                    .setColor("#2ECC71")
-                    .setTitle("✅ Registro & Apelido Aprovados")
-                    .addFields({
-                        name: "👮 Avaliado por",
-                        value: "<@" + interaction.user.id + "> em <t:" + Math.floor(Date.now() / 1000) + ":f>",
-                        inline: false
-                    });
-
-                await interaction.update({
-                    embeds: [embedAprovada],
-                    components: [] // Remove os botões
-                });
-
-                // Enviar DM ao Usuário
-                await membroAlvo.send({
-                    embeds: [
-                        new EmbedBuilder()
-                            .setColor("#2ECC71")
-                            .setTitle("🎉 Cidadania e Apelido Aprovados! Seja bem-vindo(a)!")
-                            .setDescription("Olá **" + membroAlvo.user.username + "**! 👋\n\nSua solicitação de registro para o grupo **" + grupoInfo.emoji + " " + grupoInfo.name + "** foi **APROVADA** pela administração!\n\n> ✅ Você recebeu o cargo **" + grupoInfo.name + "**" + apelidoAlteradoMsg + "\n> 🔓 Todos os canais e categorias de voz/texto foram liberados.\n\nDivirta-se em nossa comunidade!")
-                            .setFooter({ text: CONFIG.FOOTER })
-                            .setTimestamp()
-                    ]
-                }).catch(() => {
-                    console.log("ℹ️ Não foi possível enviar DM para " + membroAlvo.user.tag + " (DM fechada ou bloqueada).");
-                });
-
-                console.log("✅ REGISTRO E APELIDO APROVADOS: " + membroAlvo.user.tag + " -> " + grupoInfo.name + " (" + novoApelido + ")");
+            await membroAlvo.send({ content: `🎉 **Seu registro na comunidade foi Aprovado!** O cargo de Morador e de **${grupo.name}** foram entregues.` }).catch(() => {});
+        } else if (acao === "recusar") {
+            await interaction.update({
+                embeds: [EmbedBuilder.from(interaction.message.embeds[0]).setColor("#E74C3C").setTitle("❌ Registro Recusado")],
+                components: []
+            });
+            if (membroAlvo) {
+                await membroAlvo.send({ content: `❌ **Sua solicitação de registro para ${grupo.name} foi recusada.** Você pode refazer o cadastro no painel do servidor.` }).catch(() => {});
             }
-
-            // ==========================================
-            // FLUXO: RECUSA ❌
-            // ==========================================
-            if (acao === "recusar") {
-                const embedRecusada = EmbedBuilder.from(interaction.message.embeds[0])
-                    .setColor("#E74C3C")
-                    .setTitle("❌ Registro Recusado")
-                    .addFields({
-                        name: "👮 Avaliado por",
-                        value: "<@" + interaction.user.id + "> em <t:" + Math.floor(Date.now() / 1000) + ":f>",
-                        inline: false
-                    });
-
-                await interaction.update({
-                    embeds: [embedRecusada],
-                    components: [] // Remove os botões
-                });
-
-                if (membroAlvo) {
-                    await membroAlvo.send({
-                        embeds: [
-                            new EmbedBuilder()
-                                .setColor("#E74C3C")
-                                .setTitle("❌ Solicitação de Registro Recusada")
-                                .setDescription("Olá **" + membroAlvo.user.username + "**,\n\nInformamos que sua solicitação para ingressar no grupo **" + grupoInfo.name + "** foi avaliada e **recusada** pela equipe de Administração.\n\nCaso acredite que houve algum engano ou deseje refazer seu cadastro com outro nome/ID, clique novamente em **Realizar Registro** no painel.")
-                                .setFooter({ text: CONFIG.FOOTER })
-                                .setTimestamp()
-                        ]
-                    }).catch(() => {});
-                }
-
-                console.log("❌ REGISTRO RECUSADO: ID " + alvoUserId + " (Por: " + interaction.user.tag + ")");
-            }
-        } catch (err) {
-            console.error("Erro na ação do admin:", err);
-            return interaction.reply({
-                content: "❌ **Erro ao processar a avaliação:**\n`" + (err.message || err) + "`\n\n*Dica: Verifique em Configurações do Servidor -> Cargos se o cargo do Bot está posicionado acima dos cargos que ele precisa atribuir.*",
-                ephemeral: true
-            }).catch(() => {});
         }
     }
 });
 
-// ===============================
-// COMANDOS DE ADMINISTRAÇÃO NO CHAT (!limparcargos ou !resetgrupos)
-// ===============================
+// Comandos por mensagem de texto (!limparcargos ou !resetgrupos)
 client.on(Events.MessageCreate, async (message) => {
     if (message.author.bot || !message.guild) return;
 
-    const lowerContent = message.content.toLowerCase();
-    if (lowerContent === "!limparcargos" || lowerContent === "!resetgrupos") {
-        try {
-            if (!message.member || !message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-                return message.reply("❌ Apenas Administradores podem executar a limpeza geral de cargos para recadastro.");
-            }
-
-            // Deleta a mensagem do comando imediatamente para deixar o chat limpo
-            await message.delete().catch(() => {});
-
-            console.log("🧹 Comando de limpeza iniciado por: " + message.author.tag);
-            const msgStatus = await message.channel.send("⏳ **Iniciando limpeza de cargos dos Amigos e Facções...** Por favor, aguarde.");
-            const todosGruposIds = CONFIG.GRUPOS.map(g => g.roleId);
-            let countRemovidos = 0;
-
-            const membros = await message.guild.members.fetch();
-            for (const [id, mem] of membros) {
-                if (mem.user.bot) continue;
-                const cargosRemover = mem.roles.cache.filter(r => todosGruposIds.includes(r.id));
-                if (cargosRemover.size > 0) {
-                    await mem.roles.remove(cargosRemover).catch(() => {});
-                    countRemovidos++;
-                }
-            }
-
-            // Marca o @everyone na mensagem principal de registro e envia uma notificação no canal de registro
-            const canalRegistro = await message.guild.channels.fetch(CONFIG.CANAL_REGISTRO_ID).catch(() => null);
-            if (canalRegistro) {
-                const salvo = carregarPainel();
-                if (salvo && salvo.messageId) {
-                    const panelMsg = await canalRegistro.messages.fetch(salvo.messageId).catch(() => null);
-                    if (panelMsg) {
-                        await panelMsg.edit({
-                            content: "@everyone",
-                            embeds: panelMsg.embeds,
-                            components: panelMsg.components
-                        }).catch(() => {});
-                    }
-                }
-                await canalRegistro.send("📢 **@everyone Atenção!** Todos os cargos dos Amigos e Facções foram limpos. Por favor, utilizem o painel abaixo para realizar o seu registro obrigatório!").catch(() => {});
-            }
-
-            await msgStatus.edit("✅ **Limpeza Concluída com Sucesso!**\n> 🧹 Cargos dos Amigos e Facções foram retirados de **" + countRemovidos + "** membros.\n> 📢 O painel foi marcado com @everyone e liberado para todos fazerem o registro obrigatório com Tag e ID!");
-        } catch (err) {
-            console.error("Erro ao executar limpeza de cargos:", err);
-            message.reply("❌ Erro ao remover cargos: " + (err.message || err)).catch(() => {});
+    const content = message.content.toLowerCase();
+    if (content === "!limparcargos" || content === "!resetgrupos") {
+        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            return message.reply("❌ Apenas Administradores podem usar este comando.");
         }
+
+        const msgStatus = await message.reply("⏳ **Limpando cargos antigos dos membros...** Aguarde.");
+        const todosGruposIds = CONFIG.GRUPOS.map(g => g.roleId);
+        let count = 0;
+
+        const membros = await message.guild.members.fetch();
+        for (const [id, mem] of membros) {
+            if (mem.user.bot) continue;
+            const cargosRemover = mem.roles.cache.filter(r => todosGruposIds.includes(r.id));
+            if (cargosRemover.size > 0) {
+                await mem.roles.remove(cargosRemover).catch(() => {});
+                count++;
+            }
+        }
+
+        await msgStatus.edit(`✅ **Limpeza Geral Concluída!** Os cargos foram retirados de **${count}** membros. O painel está liberado para recadastro!`);
     }
 });
 
-// ===============================
-// TRATAMENTO DE ERROS GLOBAIS (ANTI-CRASH)
-// ===============================
+// Anti-Crash do processo do Bot
+process.on("unhandledRejection", (r) => console.error("Unhandled Rejection:", r));
+process.on("uncaughtException", (e) => console.error("Uncaught Exception:", e));
 
-process.on("unhandledRejection", (reason) => {
-    console.error("⚠️ [ANTI-CRASH] Unhandled Rejection:", reason);
-});
-
-process.on("uncaughtException", (err) => {
-    console.error("⚠️ [ANTI-CRASH] Uncaught Exception:", err);
-});
-
-// ===============================
-// INICIALIZAR BOT
-// ===============================
-
-if (!TOKEN || TOKEN.trim() === "") {
-    console.error("❌ ERRO CRÍTICO: Token do Bot não foi configurado no arquivo .env ou no Railway!");
-} else {
-    client.login(TOKEN).catch(err => {
-        console.error("❌ ERRO AO FAZER LOGIN DO BOT: Verifique se o TOKEN está correto e as Intents estão ativadas!", err);
-    });
-}
+client.login(TOKEN);
