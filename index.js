@@ -235,9 +235,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
             .setStyle(TextInputStyle.Short)
             .setRequired(true);
 
+        const inputContratou = new TextInputBuilder()
+            .setCustomId("input_contratou")
+            .setLabel("Quem te contratou?")
+            .setPlaceholder("Ex: Henrique Souza")
+            .setStyle(TextInputStyle.Short)
+            .setRequired(true);
+
         modal.addComponents(
             new ActionRowBuilder().addComponents(inputNome),
-            new ActionRowBuilder().addComponents(inputId)
+            new ActionRowBuilder().addComponents(inputId),
+            new ActionRowBuilder().addComponents(inputContratou)
         );
 
         await interaction.showModal(modal);
@@ -250,6 +258,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         const nome = interaction.fields.getTextInputValue("input_nome").trim();
         const idJogo = interaction.fields.getTextInputValue("input_id").trim();
+        const quemContratou = interaction.fields.getTextInputValue("input_contratou").trim();
         let novoApelido = CONFIG.FORMATO_APELIDO.replace("{TAG}", grupoEscolhido.tag).replace("{NOME}", nome).replace("{ID}", idJogo);
 
         if (novoApelido.length > 32) novoApelido = novoApelido.substring(0, 32);
@@ -268,6 +277,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 { name: "🎯 Grupo", value: `${grupoEscolhido.emoji} **${grupoEscolhido.name}**`, inline: true },
                 { name: "📝 Nome", value: nome, inline: true },
                 { name: "🔢 ID", value: idJogo, inline: true },
+                { name: "🤝 Quem te Contratou", value: `**${quemContratou}**`, inline: false },
                 { name: "🏷️ Apelido Solicitado", value: `\`${novoApelido}\``, inline: false }
             )
             .setTimestamp();
