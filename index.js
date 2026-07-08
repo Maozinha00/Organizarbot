@@ -40,7 +40,7 @@ import {
 import fs from "fs";
 
 // Token de conexão do Bot (Pega das variáveis do sistema)
-const TOKEN = process.env.DISCORD_TOKEN || process.env.TOKEN;
+const TOKEN = process.env.TOKEN || process.env.TOKEN;
 
 // ===============================
 // CONFIGURAÇÃO DO SISTEMA
