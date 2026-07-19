@@ -81,7 +81,7 @@ const CONFIG = {
             "name": "FiveZ Hunters",
             "roleId": "1515125826780135485",
             "emoji": "🎯",
-            "tag": "|Hunters|",
+            "tag": "|Recruta|",
             "description": "Caçadores de elite de FiveZ e operações táticas"
         },
         {
