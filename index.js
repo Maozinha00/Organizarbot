@@ -1,10 +1,16 @@
 /**
  * ============================================================================
- * BOT AUTOMÁTICO DE REGISTRO DISCORD — FIVEZ & LUMENFALL CITY (ES MODULES)
+ * BOT AUTOMÁTICO DE REGISTRO DISCORD — FIVEZ & LUMENFALL CITY
  * ============================================================================
  * 
- * REGRA AUTOMÁTICA ADICIONADA: 
- * -> Qualquer nome ou tag contendo "Hunters" é alterado para "Recruta" automaticamente!
+ * REGRA ATIVA: Toda menção ao nome "Hunters" muda para "Recruta" AUTOMATICAMENTE.
+ * ----------------------------------------------------------------------------
+ * Recursos inclusos:
+ *  - Varredura de Segurança: Modifica o apelido de quem já está no servidor.
+ *  - Auto-Rename ao Entrar/Digitar/Atualizar: Corrige "Hunters" ➔ "Recruta".
+ *  - Limpeza de Cargos (!limparcargos): Remove cargos de facção de membros inativos.
+ *  - Proteção de Call: Membros em canal de voz NÃO perdem cargos no reset.
+ *  - Painel Interativo de Cidadania com botões, modais e logs na administração.
  * ============================================================================
  */
 
@@ -19,8 +25,6 @@ import {
     ButtonBuilder,
     ButtonStyle,
     ActionRowBuilder,
-    StringSelectMenuBuilder,
-    StringSelectMenuOptionBuilder,
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle,
@@ -28,40 +32,22 @@ import {
     PermissionsBitField
 } from "discord.js";
 
-import fs from "fs";
-
-// Token de conexão do Bot (Pega do arquivo .env)
+// Token de conexão do Bot (Definido nas variáveis de ambiente do seu sistema)
 const TOKEN = process.env.DISCORD_TOKEN || process.env.TOKEN;
 
 // ===============================
-// FUNÇÃO DE CONVERSÃO AUTOMÁTICA (REGRA PRINCIPAL)
-// ===============================
-function aplicarRegraRecuta(texto) {
-    if (!texto) return texto;
-    // Substitui qualquer variação de "Hunters" por "Recruta" (Insensível a maiúsculas/minúsculas)
-    return texto.replace(/hunters/gi, (match) => {
-        if (match === 'HUNTERS') return 'RECRUTA';
-        if (match === 'hunters') return 'recruta';
-        return 'Recruta';
-    });
-}
-
-// ===============================
-// CONFIGURAÇÃO DO SISTEMA
+// CONFIGURAÇÃO GERAL DO SISTEMA
 // ===============================
 const CONFIG = {
     CANAL_REGISTRO_ID: "1515448138385592361",
-    CANAL_LOGS_ID: "1515448473246498866", // Canal de Logs de Aprovação
-    CANAL_ENTRADA_SAIDA_ID: "1524222632923496509", // Canal solicitado para Entrada e Saída
-    CARGO_MORADOR_ID: "1515125842328424640",
+    CANAL_LOGS_ID: "1515448473246498866", 
+    CANAL_ENTRADA_SAIDA_ID: "1524222632923496509", 
+    CARGO_MORADOR_ID: "1515125822556550000",
 
     EMBED_COLOR: "#2ECC71",
     FOOTER: "FiveZ & Lumenfall • Sistema Automático",
-    SPAM_COOLDOWN_MS: 30000, // 30 segundos
     FORMATO_APELIDO: "{TAG} {NOME} | {ID}",
-    PERMITIR_RECADASTRO: true,
 
-    // GRUPOS CONFIGURADOS COM A REGRA APLICADA
     GRUPOS: [
         {
             "name": "Amigos",
@@ -78,11 +64,11 @@ const CONFIG = {
             "description": "Membros mais próximos e família do servidor"
         },
         {
-            "name": aplicarRegraRecuta("FiveZ Hunters"), // "FiveZ Hunters" -> "FiveZ Recruta" automaticamente
+            "name": "FiveZ Recruta", // Alterado de Hunters para Recruta
             "roleId": "1515125826780135485",
             "emoji": "🎯",
-            "tag": "|Recruta|",
-            "description": "Caçadores de elite e recrutas em operações táticas"
+            "tag": "|Recruta|", // Tag padronizada para Recruta
+            "description": "Caçadores de elite de FiveZ e operações táticas"
         },
         {
             "name": "Lumenfall City",
@@ -94,528 +80,387 @@ const CONFIG = {
     ]
 };
 
-const PANEL_FILE = "./panel.json";
-
-// Map para controle do Anti-Spam (UserID -> Timestamp)
-const cooldown = new Map();
-
-// ===============================
-// INICIALIZAÇÃO DO CLIENTE DISCORD
-// ===============================
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers, 
+        GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent 
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildVoiceStates
     ],
-    partials: [
-        Partials.Channel,
-        Partials.GuildMember,
-        Partials.User
-    ]
+    partials: [Partials.GuildMember, Partials.User]
 });
 
-// ===============================
-// GERENCIAMENTO DE PERSISTÊNCIA DO PAINEL (JSON)
-// ===============================
-function salvarPainel(messageId) {
-    try {
-        fs.writeFileSync(
-            PANEL_FILE,
-            JSON.stringify({ messageId: messageId, updatedAt: new Date().toISOString() }, null, 4)
-        );
-    } catch (err) {
-        console.error("⚠️ Erro ao salvar o arquivo do painel (panel.json):", err);
+// ============================================================================
+// FUNÇÃO AUXILIAR: REGRA DE SUBSTUIÇÃO AUTOMÁTICA
+// ============================================================================
+function autoRenameHunters(text) {
+    if (!text) return { text: '', changed: false };
+    
+    const regex = /hunters/gi;
+    const hasMatch = regex.test(text);
+    
+    if (hasMatch) {
+        const replaced = text.replace(regex, (match) => {
+            if (match === 'HUNTERS') return 'RECRUTA';
+            if (match === 'hunters') return 'recruta';
+            return 'Recruta';
+        });
+        return { text: replaced, changed: true };
     }
+    
+    return { text, changed: false };
 }
 
-function carregarPainel() {
-    if (!fs.existsSync(PANEL_FILE)) return null;
-    try {
-        return JSON.parse(fs.readFileSync(PANEL_FILE, "utf-8"));
-    } catch (e) {
-        return null;
-    }
-}
+// ============================================================================
+// VERIFICAÇÃO E RENOVAÇÃO DE APELIDO
+// ============================================================================
+async function checkAndRenameMember(member) {
+    if (member.user.bot) return;
+    
+    const currentUsername = member.user.username;
+    const currentNickname = member.nickname || '';
+    
+    const userCheck = autoRenameHunters(currentUsername);
+    const nickCheck = autoRenameHunters(currentNickname);
+    
+    // Se o nome de usuário ou apelido atual contiver "Hunters", realizamos a mudança
+    if (userCheck.changed || nickCheck.changed) {
+        let newNickname = currentNickname;
+        
+        if (currentNickname) {
+            newNickname = nickCheck.text;
+        } else {
+            newNickname = userCheck.text;
+        }
 
-// ===============================
-// CONSTRUÇÃO DO PAINEL PRINCIPAL
-// ===============================
-function criarPainel(guild) {
-    const embed = new EmbedBuilder()
-        .setColor(CONFIG.EMBED_COLOR)
-        .setAuthor({
-            name: guild.name,
-            iconURL: guild.iconURL() || undefined
-        })
-        .setTitle("🏡 Sistema de Registro — Cidadania & Grupos")
-        .setDescription(`# Seja bem-vindo à nossa Comunidade!
-
-📢 **AVISO IMPORTANTE PARA TODOS (@everyone):**
-> ⚠️ **PRAZO LIMITE DE REGISTRO:** Todo membro que entrar no servidor tem um prazo máximo de **3 dias** para realizar o registro de cidadania.
-> 🚫 Se você passar de **3 dias** no servidor sem realizar o seu registro (ficando sem os cargos dos grupos), você será **kickado automaticamente** pelo sistema!
-
-Para desbloquear todos os canais de voz e texto do servidor e registrar sua cidadania, selecione seu grupo abaixo.
-
-### 🎁 Benefícios ao registrar:
-> ✅ **Cargo do seu Grupo escolhido**
-> 🏷️ **Apelido Atualizado:** Com a tag da facção, seu Nome, ID e quem te contratou
-> 🔓 **Liberação imediata** dos canais e categorias do servidor
-> 🎉 **Acesso completo** a eventos, caças e roleplay da cidade
-
-👇 *Clique no botão abaixo, escolha seu grupo e preencha o formulário com seu Nome no Jogo, ID e quem te contratou!*`)
-        .setThumbnail(guild.iconURL() || null)
-        .setFooter({ text: CONFIG.FOOTER })
-        .setTimestamp();
-
-    const botao = new ButtonBuilder()
-        .setCustomId("abrir_menu_registro")
-        .setEmoji("🏡")
-        .setLabel("Realizar Registro")
-        .setStyle(ButtonStyle.Success);
-
-    const row = new ActionRowBuilder().addComponents(botao);
-
-    return {
-        content: "@everyone",
-        embeds: [embed],
-        components: [row]
-    };
-}
-
-// ===============================
-// ENVIAR / ATUALIZAR PAINEL DE REGISTRO
-// ===============================
-async function enviarPainel(guild, canal) {
-    if (!canal) return;
-
-    const painel = criarPainel(guild);
-    const salvo = carregarPainel();
-
-    if (salvo && salvo.messageId) {
+        // Restringe ao limite de 32 caracteres do Discord
+        if (newNickname.length > 32) {
+            newNickname = newNickname.substring(0, 32);
+        }
+        
         try {
-            const message = await canal.messages.fetch(salvo.messageId);
-            await message.edit(painel);
-            console.log("✅ Painel de registro existente foi atualizado automaticamente.");
-            return;
-        } catch (e) {
-            console.log("ℹ️ Mensagem antiga do painel não foi encontrada. Criando uma nova mensagem...");
+            await member.setNickname(newNickname);
+            console.log(`[RENAME] @${currentUsername} renomeado para "${newNickname}" com sucesso!`);
+            
+            // Envia um Log administrativo da correção aplicada
+            const logsChannel = member.guild.channels.cache.get(CONFIG.CANAL_LOGS_ID);
+            if (logsChannel && logsChannel.isTextBased()) {
+                const embed = new EmbedBuilder()
+                    .setColor('#F1C40F')
+                    .setTitle('🛡️ Correção de Apelido Aplicada')
+                    .setDescription(`O bot alterou o apelido do membro para cumprir a regra **Hunters ➔ Recruta**.`)
+                    .addFields(
+                        { name: '👤 Cidadão', value: `<@${member.id}> (${currentUsername})`, inline: true },
+                        { name: '📝 Apelido Corrigido', value: `\`${newNickname}\``, inline: true }
+                    )
+                    .setFooter({ text: CONFIG.FOOTER })
+                    .setTimestamp();
+                
+                await logsChannel.send({ embeds: [embed] });
+            }
+        } catch (err) {
+            console.error(`[RENAME ERROR] Erro ao redefinir apelido de @${currentUsername}:`, err.message);
         }
     }
-
-    const novaMensagem = await canal.send(painel);
-    salvarPainel(novaMensagem.id);
-    console.log("✅ Novo painel de registro criado e salvo em panel.json. ID: " + novaMensagem.id);
 }
 
-// ===============================
-// EVENTO: BOT ONLINE
-// ===============================
+// ============================================================================
+// EVENTO: BOT ONLINE (Varredura de segurança inicial)
+// ============================================================================
 client.once(Events.ClientReady, async () => {
-    console.log("==================================================");
-    console.log("✅ BOT ONLINE E CONECTADO: " + client.user.tag);
-    console.log("🛡️ Proteção Anti-Spam: " + (CONFIG.SPAM_COOLDOWN_MS / 1000) + " segundos");
-    console.log("📢 Regra de Conversão de Hunters para Recruta: ATIVA 🔄");
-    console.log("==================================================");
-
-    const guild = client.guilds.cache.first();
-    if (!guild) {
-        return console.log("❌ O bot não está em nenhum servidor no momento. Use o link de convite do Bot.");
-    }
-
-    const canalRegistro = await guild.channels.fetch(CONFIG.CANAL_REGISTRO_ID).catch(() => null);
-    if (canalRegistro) {
-        await enviarPainel(guild, canalRegistro);
-    }
-});
-
-// ============================================================================
-// REGISTRO DE ENTRADA (Membro Entrou no Servidor)
-// ============================================================================
-client.on(Events.GuildMemberAdd, async (member) => {
-    try {
-        console.log(`📥 Novo membro entrou: ${member.user.tag} (${member.id})`);
-
-        const canalLog = await member.guild.channels.fetch(CONFIG.CANAL_ENTRADA_SAIDA_ID).catch(() => null);
-        if (canalLog && canalLog.isTextBased()) {
-            const embed = new EmbedBuilder()
-                .setColor("#2ECC71") // Verde
-                .setAuthor({
-                    name: "Membro Entrou no Servidor",
-                    iconURL: member.user.displayAvatarURL()
-                })
-                .setTitle(`Seja bem-vindo(a) à nossa Cidade, ${member.user.username}! 🏙️`)
-                .setDescription(`Olá ${member}! Desejamos que tenha uma excelente jornada em nossa comunidade. 
-
-⚠️ **Atenção:** Você tem até **3 dias** para se registrar no canal <#${CONFIG.CANAL_REGISTRO_ID}> e obter seus cargos de cidadão/grupo para evitar o desligamento automático.`)
-                .setThumbnail(member.user.displayAvatarURL())
-                .addFields(
-                    { name: "👤 Usuário Discord", value: `${member.user.tag} (${member})`, inline: true },
-                    { name: "🆔 Discord ID", value: `\`${member.id}\``, inline: true },
-                    { name: "📅 Conta Criada Em", value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`, inline: false },
-                    { name: "📊 População Atual", value: `\`${member.guild.memberCount}\` cidadãos`, inline: true }
-                )
-                .setFooter({ text: CONFIG.FOOTER })
-                .setTimestamp();
-
-            await canalLog.send({ content: `${member}, bem-vindo!`, embeds: [embed] });
-        }
-    } catch (err) {
-        console.error("❌ Erro ao processar evento de Entrada (GuildMemberAdd):", err);
-    }
-});
-
-// ============================================================================
-// REGISTRO DE SAÍDA (Membro Saiu do Servidor)
-// ============================================================================
-client.on(Events.GuildMemberRemove, async (member) => {
-    try {
-        console.log(`📤 Membro saiu: ${member.user.tag} (${member.id})`);
-
-        const canalLog = await member.guild.channels.fetch(CONFIG.CANAL_ENTRADA_SAIDA_ID).catch(() => null);
-        if (canalLog && canalLog.isTextBased()) {
-            const joinedAt = member.joinedTimestamp 
-                ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:F> (<t:${Math.floor(member.joinedTimestamp / 1000)}:R>)` 
-                : "Indisponível";
-
-            const embed = new EmbedBuilder()
-                .setColor("#E74C3C") // Vermelho
-                .setAuthor({
-                    name: "Membro Saiu do Servidor",
-                    iconURL: member.user.displayAvatarURL()
-                })
-                .setTitle(`Desconexão de Cidadão 🏃‍♂️💨`)
-                .setDescription(`O cidadão **${member.user.username}** mudou-se de nossa cidade. Esperamos vê-lo novamente.`)
-                .setThumbnail(member.user.displayAvatarURL())
-                .addFields(
-                    { name: "👤 Usuário Discord", value: `**${member.user.tag}**`, inline: true },
-                    { name: "🆔 Discord ID", value: `\`${member.id}\``, inline: true },
-                    { name: "📅 Estava Conosco Desde", value: joinedAt, inline: false },
-                    { name: "📊 População Atual", value: `\`${member.guild.memberCount}\` cidadãos`, inline: true }
-                )
-                .setFooter({ text: CONFIG.FOOTER })
-                .setTimestamp();
-
-            await canalLog.send({ embeds: [embed] });
-        }
-    } catch (err) {
-        console.error("❌ Erro ao processar evento de Saída (GuildMemberRemove):", err);
-    }
-});
-
-// ============================================================================
-// EVENTO: MONITORAMENTO DE CARGOS (GuildMemberUpdate)
-// ============================================================================
-client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
-    try {
-        const todosGruposIds = CONFIG.GRUPOS.map(g => g.roleId);
-        const cargosBot = [...todosGruposIds, CONFIG.CARGO_MORADOR_ID].filter(id => id);
-
-        // Se um cargo do bot foi removido do membro, resetamos o apelido
-        const cargosRemovidos = oldMember.roles.cache.filter(role => cargosBot.includes(role.id) && !newMember.roles.cache.has(role.id));
-
-        if (cargosRemovidos.size > 0 && newMember.nickname) {
-            const guild = newMember.guild;
-
-            if (newMember.id === guild.ownerId) return;
-
-            // Remove o apelido personalizado (tira tag e id)
-            await newMember.setNickname(null)
-                .then(() => {
-                    console.log(`✅ Apelido de ${newMember.user.tag} redefinido devido à remoção de cargo.`);
-                })
-                .catch(err => {
-                    console.error(`❌ Erro ao remover apelido:`, err);
-                });
-        }
-    } catch (err) {
-        console.error("❌ Erro no monitoramento de cargos (GuildMemberUpdate):", err);
-    }
-});
-
-// ===============================
-// EVENTO: INTERAÇÕES COM BOTÕES E MENUS
-// ===============================
-client.on(Events.InteractionCreate, async (interaction) => {
-    const guild = interaction.guild;
-    if (!guild) return;
-
-    // ------------------------------------------------------------------------
-    // ETAPA 1: CLIQUE NO BOTÃO "REALIZAR REGISTRO" -> ABRE MENU DE ESCOLHA
-    // ------------------------------------------------------------------------
-    if (interaction.isButton() && interaction.customId === "abrir_menu_registro") {
+    console.log(`==================================================`);
+    console.log(`✅ BOT ONLINE: ${client.user.tag}`);
+    console.log(`🛡️ Regra Ativa: Hunters ➔ Recruta`);
+    console.log(`==================================================`);
+    
+    // Varredura para encontrar quem já está no servidor com nome antigo "Hunters"
+    for (const guild of client.guilds.cache.values()) {
         try {
-            // Verificar Anti-Spam
-            if (cooldown.has(interaction.user.id)) {
-                const tempoRestante = Math.ceil((cooldown.get(interaction.user.id) - Date.now()) / 1000);
-                if (tempoRestante > 0) {
-                    return interaction.reply({
-                        content: `⏳ **Proteção Anti-Spam:** Aguarde **${tempoRestante} segundos** para usar o registro novamente.`,
-                        ephemeral: true
-                    });
-                } else {
-                    cooldown.delete(interaction.user.id);
+            console.log(`[AUTO-SCAN] Buscando na cidade: ${guild.name}...`);
+            const members = await guild.members.fetch();
+            let renomeados = 0;
+            
+            for (const member of members.values()) {
+                const usernameContains = /hunters/gi.test(member.user.username);
+                const nicknameContains = member.nickname && /hunters/gi.test(member.nickname);
+                
+                if (usernameContains || nicknameContains) {
+                    await checkAndRenameMember(member);
+                    renomeados++;
                 }
             }
-
-            const membro = await guild.members.fetch(interaction.user.id).catch(() => null);
-            if (!membro) {
-                return interaction.reply({ content: "❌ Erro ao carregar seu perfil.", ephemeral: true });
-            }
-
-            if (!CONFIG.PERMITIR_RECADASTRO && membro.roles.cache.has(CONFIG.CARGO_MORADOR_ID)) {
-                return interaction.reply({
-                    content: "✅ **Você já possui o cargo Morador no servidor!**",
-                    ephemeral: true
-                });
-            }
-
-            const selectMenu = new StringSelectMenuBuilder()
-                .setCustomId("select_grupo_registro")
-                .setPlaceholder("🎯 Selecione seu Grupo / Facção na lista...");
-
-            CONFIG.GRUPOS.forEach(g => {
-                selectMenu.addOptions(
-                    new StringSelectMenuOptionBuilder()
-                        .setLabel(g.name + " (" + (g.tag || '|TAG|') + ")")
-                        .setValue(g.roleId)
-                        .setEmoji(g.emoji)
-                        .setDescription(g.description ? g.description.substring(0, 100) : "Ingressar no grupo")
-                );
-            });
-
-            const row = new ActionRowBuilder().addComponents(selectMenu);
-
-            return interaction.reply({
-                content: "🏡 **Processo de Cidadania & Apelido:**\nEscolha abaixo qual grupo ou família você deseja participar no servidor.",
-                components: [row],
-                ephemeral: true
-            });
+            console.log(`[AUTO-SCAN] Concluído! ${renomeados} moradores rebatizados para Recruta.`);
         } catch (err) {
-            console.error(err);
+            console.error(`[AUTO-SCAN ERROR] Erro ao escanear a guilda ${guild.name}:`, err);
         }
     }
+});
 
-    // ------------------------------------------------------------------------
-    // ETAPA 2: SELECIONOU SEU GRUPO -> ABRE MODAL FORMULÁRIO
-    // ------------------------------------------------------------------------
-    if (interaction.isStringSelectMenu() && interaction.customId === "select_grupo_registro") {
+// ============================================================================
+// EVENTO: ENTRADA DE NOVO MEMBRO
+// ============================================================================
+client.on(Events.GuildMemberAdd, async (member) => {
+    console.log(`[JOIN] Membro @${member.user.username} acabou de entrar.`);
+    
+    // Mensagem de entrada e aviso de cidadania
+    const welcomeChannel = member.guild.channels.cache.get(CONFIG.CANAL_ENTRADA_SAIDA_ID);
+    if (welcomeChannel && welcomeChannel.isTextBased()) {
+        const embed = new EmbedBuilder()
+            .setColor('#2ECC71')
+            .setTitle('🏙️ Bem-vindo(a) à nossa Cidade!')
+            .setDescription(`Olá <@${member.id}>, bem-vindo! 
+            
+            Por favor, realize seu registro no canal <#${CONFIG.CANAL_REGISTRO_ID}> para obter seus cargos de morador e a tag da sua facção.
+            
+            ⚠️ **Atenção:** Se você ficar mais de **3 dias** sem se registrar, será removido automaticamente!`)
+            .setThumbnail(member.user.displayAvatarURL())
+            .setFooter({ text: CONFIG.FOOTER })
+            .setTimestamp();
+        
+        await welcomeChannel.send({ content: `<@${member.id}>`, embeds: [embed] });
+    }
+    
+    // Verifica e corrige o nome no momento da entrada
+    await checkAndRenameMember(member);
+});
+
+// ============================================================================
+// EVENTO: ATUALIZAÇÕES DE PERFIL (Evita que mudem o nome manualmente para Hunters)
+// ============================================================================
+client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
+    if (oldMember.nickname !== newMember.nickname) {
+        await checkAndRenameMember(newMember);
+    }
+});
+
+// ============================================================================
+// EVENTO: MONITORAMENTO DE CHAT & COMANDOS (!limparcargos / !resetgrupos)
+// ============================================================================
+client.on(Events.MessageCreate, async (message) => {
+    if (message.author.bot || !message.guild) return;
+    
+    // Varre quem enviou a mensagem por segurança
+    if (message.member) {
+        await checkAndRenameMember(message.member);
+    }
+    
+    const content = message.content.toLowerCase().trim();
+    
+    if (content === '!limparcargos' || content === '!resetgrupos') {
+        if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+            return message.reply('❌ Apenas administradores possuem permissão de limpar cargos.');
+        }
+        
+        const statusMsg = await message.reply('⏳ **Iniciando limpeza e reset periódico de cargos...**');
+        
         try {
-            const roleIdEscolhido = interaction.values[0];
-            const grupoEscolhido = CONFIG.GRUPOS.find(g => g.roleId === roleIdEscolhido);
+            const members = await message.guild.members.fetch();
+            const groupRoleIds = CONFIG.GRUPOS.map(g => g.roleId);
+            
+            let countCleaned = 0;
+            let countProtected = 0;
+            
+            for (const member of members.values()) {
+                if (member.user.bot) continue;
+                
+                // PROTEÇÃO DE CALL: Se estiver ativo em uma chamada de voz, não perde os cargos!
+                if (member.voice.channelId) {
+                    countProtected++;
+                    continue;
+                }
+                
+                // Verifica se tem algum cargo cadastrado na lista
+                const hasGroupRole = member.roles.cache.some(r => groupRoleIds.includes(r.id));
+                if (hasGroupRole) {
+                    await member.roles.remove(groupRoleIds).catch(() => {});
+                    await member.setNickname(null).catch(() => {});
+                    countCleaned++;
+                }
+            }
+            
+            const summaryText = `🧹 **Limpeza Concluída com Sucesso!**\n> 🧼 Cargos de facção removidos de **${countCleaned}** membros offline/inativos.\n> 🗣️ **${countProtected}** membros protegidos em Call de Voz mantiveram seus cargos intactos.`;
+            await statusMsg.edit(summaryText);
+            
+            // Notificação geral no canal de registros
+            const registerChannel = message.guild.channels.cache.get(CONFIG.CANAL_REGISTRO_ID);
+            if (registerChannel && registerChannel.isTextBased()) {
+                await registerChannel.send('📢 **@everyone Atenção!** Todos os cargos inativos foram limpos no reset periódico. Por favor, registrem-se novamente clicando no painel acima!');
+            }
+        } catch (err) {
+            console.error(err);
+            await statusMsg.edit('❌ Ocorreu um erro ao processar o comando de limpeza.');
+        }
+    }
+});
 
+// ============================================================================
+// EVENTO: INTEGRAÇÕES DO PAINEL (Botões de Aprovação, Recusa e Formulários)
+// ============================================================================
+client.on(Events.InteractionCreate, async (interaction) => {
+    if (interaction.isButton()) {
+        if (interaction.customId === 'abrir_menu_registro') {
             const modal = new ModalBuilder()
-                .setCustomId("modal_reg_" + grupoEscolhido.roleId)
-                .setTitle("Registro - " + grupoEscolhido.name.substring(0, 25));
-
-            const inputNome = new TextInputBuilder()
-                .setCustomId("input_nome")
-                .setLabel("Seu Nome no Jogo / Personagem")
-                .setPlaceholder("Ex: Henrique Souza")
+                .setCustomId('modal_registro')
+                .setTitle('🏡 Registro de Cidadania FiveZ');
+            
+            const nomeInput = new TextInputBuilder()
+                .setCustomId('registro_nome')
+                .setLabel('NOME COMPLETO NO JOGO')
+                .setPlaceholder('Ex: Henrique Souza')
+                .setStyle(TextInputStyle.Short)
+                .setRequired(true);
+            
+            const idInput = new TextInputBuilder()
+                .setCustomId('registro_id')
+                .setLabel('SEU ID NO JOGO')
+                .setPlaceholder('Ex: 1001')
+                .setStyle(TextInputStyle.Short)
+                .setRequired(true);
+                
+            const grupoInput = new TextInputBuilder()
+                .setCustomId('registro_grupo')
+                .setLabel('NOME DA SUA FACÇÃO / GRUPO')
+                .setPlaceholder('Ex: Souza / Recruta / Amigos')
                 .setStyle(TextInputStyle.Short)
                 .setRequired(true);
 
-            const inputId = new TextInputBuilder()
-                .setCustomId("input_id")
-                .setLabel("Seu ID no Jogo / Cidade")
-                .setPlaceholder("Ex: 15420")
-                .setStyle(TextInputStyle.Short)
-                .setRequired(true);
-
-            const inputContratou = new TextInputBuilder()
-                .setCustomId("input_contratou")
-                .setLabel("Quem te contratou?")
-                .setPlaceholder("Ex: Henrique Souza")
+            const contratadoInput = new TextInputBuilder()
+                .setCustomId('registro_contratante')
+                .setLabel('QUEM TE CONTRATOU?')
+                .setPlaceholder('Ex: Gabriel Diretor')
                 .setStyle(TextInputStyle.Short)
                 .setRequired(true);
 
             modal.addComponents(
-                new ActionRowBuilder().addComponents(inputNome),
-                new ActionRowBuilder().addComponents(inputId),
-                new ActionRowBuilder().addComponents(inputContratou)
+                new ActionRowBuilder().addComponents(nomeInput),
+                new ActionRowBuilder().addComponents(idInput),
+                new ActionRowBuilder().addComponents(grupoInput),
+                new ActionRowBuilder().addComponents(contratadoInput)
             );
-
+            
             await interaction.showModal(modal);
-        } catch (err) {
-            console.error(err);
         }
-    }
-
-    // ------------------------------------------------------------------------
-    // ETAPA 2.5: ENVIO DO FORMULÁRIO -> CONVERSÃO HUNTERS -> RECRUTA AUTOMÁTICA
-    // ------------------------------------------------------------------------
-    if (interaction.isModalSubmit() && interaction.customId.startsWith("modal_reg_")) {
-        try {
-            const roleIdEscolhido = interaction.customId.replace("modal_reg_", "");
-            const grupoEscolhido = CONFIG.GRUPOS.find(g => g.roleId === roleIdEscolhido);
-
-            const membro = await guild.members.fetch(interaction.user.id).catch(() => null);
-            if (!membro) return;
-
-            // PEGANDO E APLICANDO A REGRA DO USUÁRIO AUTOMATICAMENTE
-            let nomePersonagem = interaction.fields.getTextInputValue("input_nome").trim();
-            let quemContratou = interaction.fields.getTextInputValue("input_contratou").trim();
-            const idJogo = interaction.fields.getTextInputValue("input_id").trim();
-
-            nomePersonagem = aplicarRegraRecuta(nomePersonagem); // "Hunters" -> "Recruta"
-            quemContratou = aplicarRegraRecuta(quemContratou);   // "Hunters" -> "Recruta"
-
-            let novoApelido = CONFIG.FORMATO_APELIDO
-                .replace("{TAG}", grupoEscolhido.tag || "|TAG|")
-                .replace("{NOME}", nomePersonagem)
-                .replace("{ID}", idJogo);
-
-            if (novoApelido.length > 32) novoApelido = novoApelido.substring(0, 32);
-
-            // Cooldown Anti-Spam
-            cooldown.set(interaction.user.id, Date.now() + CONFIG.SPAM_COOLDOWN_MS);
-
-            const canalLogs = await guild.channels.fetch(CONFIG.CANAL_LOGS_ID).catch(() => null);
-            if (!canalLogs) {
-                return interaction.reply({ content: "❌ Canal de logs de administração não encontrado.", ephemeral: true });
+        
+        // Avaliação de Administradores
+        if (interaction.customId.startsWith('aprovar_btn_') || interaction.customId.startsWith('recusar_btn_')) {
+            if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+                return interaction.reply({ content: '❌ Apenas administradores podem avaliar registros.', ephemeral: true });
             }
-
-            const embedLog = new EmbedBuilder()
-                .setColor("#3498DB")
-                .setTitle("📥 Nova Solicitação de Cidadania")
-                .addFields(
-                    { name: "👤 Usuário Discord", value: `<@${membro.id}> (${membro.user.tag})`, inline: true },
-                    { name: "🎯 Grupo", value: `${grupoEscolhido.emoji} **${grupoEscolhido.name}**`, inline: true },
-                    { name: "📝 Nome no Jogo", value: `**${nomePersonagem}**`, inline: true },
-                    { name: "🔢 ID no Jogo", value: `**${idJogo}**`, inline: true },
-                    { name: "🤝 Quem Contratou", value: `**${quemContratou}**`, inline: false },
-                    { name: "🏷️ Novo Apelido", value: `\`${novoApelido}\``, inline: false }
-                )
-                .setThumbnail(membro.user.displayAvatarURL())
-                .setTimestamp();
-
-            const btnAprovar = new ButtonBuilder()
-                .setCustomId(`aprovar_reg_${membro.id}_${grupoEscolhido.roleId}`)
-                .setEmoji("✅")
-                .setLabel("Aprovar Registro")
-                .setStyle(ButtonStyle.Success);
-
-            const btnRecusar = new ButtonBuilder()
-                .setCustomId(`recusar_reg_${membro.id}_${grupoEscolhido.roleId}`)
-                .setEmoji("❌")
-                .setLabel("Recusar")
-                .setStyle(ButtonStyle.Danger);
-
-            const rowAdmin = new ActionRowBuilder().addComponents(btnAprovar, btnRecusar);
-
-            await canalLogs.send({ embeds: [embedLog], components: [rowAdmin] });
-
-            return interaction.reply({
-                content: `✅ **Solicitação Enviada!**\nSua ficha foi enviada para análise da staff.\n\n> Apelido Solicitado: \`${novoApelido}\``,
-                ephemeral: true
-            });
-        } catch (err) {
-            console.error(err);
-        }
-    }
-
-    // ------------------------------------------------------------------------
-    // ETAPA 3: ADMIN CLICOU EM "✅ APROVAR" OU "❌ RECUSAR"
-    // ------------------------------------------------------------------------
-    if (interaction.isButton() && (interaction.customId.startsWith("aprovar_reg_") || interaction.customId.startsWith("recusar_reg_"))) {
-        try {
-            if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
-                return interaction.reply({ content: "❌ Sem permissão de **Gerenciar Cargos**.", ephemeral: true });
-            }
-
-            const partes = interaction.customId.split("_");
-            const acao = partes[0]; 
-            const alvoUserId = partes[2];
-            const alvoRoleId = partes[3];
-
-            const membroAlvo = await guild.members.fetch(alvoUserId).catch(() => null);
-            const grupoInfo = CONFIG.GRUPOS.find(g => g.roleId === alvoRoleId);
-
-            if (acao === "aprovar") {
-                if (!membroAlvo) return interaction.reply({ content: "⚠️ Usuário saiu do servidor.", ephemeral: true });
-
-                const embedAtual = interaction.message.embeds[0];
-                const campoApelido = embedAtual.fields.find(f => f.name.includes("Novo Apelido"));
-                const novoApelido = campoApelido ? campoApelido.value.replace(/[`]/g, "").trim() : null;
-
-                // Remover grupos antigos
-                const todosGruposIds = CONFIG.GRUPOS.map(g => g.roleId);
-                const cargosRemover = membroAlvo.roles.cache.filter(r => todosGruposIds.includes(r.id) && r.id !== alvoRoleId);
-                if (cargosRemover.size > 0) await membroAlvo.roles.remove(cargosRemover).catch(() => {});
-
-                // Adicionar novos cargos
-                await membroAlvo.roles.add([alvoRoleId, CONFIG.CARGO_MORADOR_ID]);
-
-                if (novoApelido && membroAlvo.id !== guild.ownerId) {
-                    await membroAlvo.setNickname(novoApelido).catch(() => {});
-                }
-
-                await interaction.update({
-                    embeds: [EmbedBuilder.from(embedAtual).setColor("#2ECC71").setTitle("✅ Registro Aprovado")],
-                    components: []
-                });
-
-                await membroAlvo.send({
-                    content: `🎉 **Seu Registro para o grupo ${grupoInfo.name} foi APROVADO!** Apelido alterado para: \`${novoApelido}\``
-                }).catch(() => {});
-            }
-
-            if (acao === "recusar") {
-                await interaction.update({
-                    embeds: [EmbedBuilder.from(interaction.message.embeds[0]).setColor("#E74C3C").setTitle("❌ Registro Recusado")],
-                    components: []
-                });
-
-                if (membroAlvo) {
-                    await membroAlvo.send({ content: `❌ Seu pedido de registro para o grupo ${grupoInfo.name} foi recusado.` }).catch(() => {});
-                }
-            }
-        } catch (err) {
-            console.error(err);
-        }
-    }
-});
-
-// ===============================
-// COMANDOS DE CHAT (!limparcargos ou !resetgrupos)
-// ===============================
-client.on(Events.MessageCreate, async (message) => {
-    if (message.author.bot || !message.guild) return;
-
-    const lowerContent = message.content.toLowerCase();
-    if (lowerContent === "!limparcargos" || lowerContent === "!resetgrupos") {
-        try {
-            if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-                return message.reply("❌ Apenas administradores.");
-            }
-
-            await message.delete().catch(() => {});
-            const msgStatus = await message.channel.send("⏳ **Limpando cargos...**");
-
-            const todosGruposIds = CONFIG.GRUPOS.map(g => g.roleId);
-            let countRemovidos = 0;
-
-            const membros = await message.guild.members.fetch();
-            for (const [id, mem] of membros) {
-                if (mem.user.bot) continue;
+            
+            const isApprove = interaction.customId.startsWith('aprovar_btn_');
+            const embed = interaction.message.embeds[0];
+            if (!embed) return interaction.reply({ content: '❌ Erro ao ler embed de registro.', ephemeral: true });
+            
+            const userField = embed.fields.find(f => f.name.includes('Usuário Discord'));
+            const userIdMatch = userField?.value.match(/<@!?(\d+)>/);
+            const userId = userIdMatch ? userIdMatch[1] : null;
+            
+            if (!userId) return interaction.reply({ content: '❌ Usuário não localizado no embed.', ephemeral: true });
+            
+            try {
+                const member = await interaction.guild.members.fetch(userId);
                 
-                // PROTEÇÃO: Ignorar quem está em call de voz!
-                if (mem.voice.channelId) continue;
-
-                const cargosRemover = mem.roles.cache.filter(r => todosGruposIds.includes(r.id));
-                if (cargosRemover.size > 0) {
-                    await mem.roles.remove(cargosRemover).catch(() => {});
-                    countRemovidos++;
+                if (isApprove) {
+                    const nomeField = embed.fields.find(f => f.name.includes('Nome no Jogo'))?.value.replace(/\*\*/g, '');
+                    const idField = embed.fields.find(f => f.name.includes('ID no Jogo'))?.value.replace(/\*\*/g, '');
+                    const grupoField = embed.fields.find(f => f.name.includes('Grupo Escolhido'))?.value;
+                    
+                    let matchedGroup = CONFIG.GRUPOS[0];
+                    for (const g of CONFIG.GRUPOS) {
+                        if (grupoField?.includes(g.name)) {
+                            matchedGroup = g;
+                            break;
+                        }
+                    }
+                    
+                    const finalNickname = `${matchedGroup.tag} ${nomeField} | ${idField}`;
+                    
+                    await member.roles.add([matchedGroup.roleId, CONFIG.CARGO_MORADOR_ID]);
+                    await member.setNickname(finalNickname);
+                    
+                    const approvedEmbed = EmbedBuilder.from(embed)
+                        .setColor('#2ECC71')
+                        .setTitle('✅ Registro & Apelido Aprovados')
+                        .addFields({ name: '👮 Avaliado por', value: `<@${interaction.user.id}>`, inline: false });
+                    
+                    await interaction.message.edit({ embeds: [approvedEmbed], components: [] });
+                    await interaction.reply({ content: `✅ Registro de <@${userId}> aprovado com sucesso!`, ephemeral: true });
+                    
+                    await member.send(`🎉 **Seu Registro foi Aprovado!**\nSua cidadania no grupo **${matchedGroup.name}** foi liberada com sucesso.\n\n> 🏷️ **Apelido Atualizado:** \`${finalNickname}\``).catch(() => {});
+                } else {
+                    const rejectedEmbed = EmbedBuilder.from(embed)
+                        .setColor('#E74C3C')
+                        .setTitle('❌ Registro Recusado')
+                        .addFields({ name: '👮 Avaliado por', value: `<@${interaction.user.id}>`, inline: false });
+                    
+                    await interaction.message.edit({ embeds: [rejectedEmbed], components: [] });
+                    await interaction.reply({ content: `❌ Registro de <@${userId}> recusado.`, ephemeral: true });
+                    
+                    await member.send(`❌ **Seu Registro foi Recusado!**\nSua solicitação de cidadania foi recusada pela equipe da Administração. Por favor, reenvie o formulário com dados corretos.`).catch(() => {});
                 }
+            } catch (err) {
+                console.error(err);
+                await interaction.reply({ content: `❌ Erro ao avaliar registro do membro: ${err.message}`, ephemeral: true });
             }
-
-            await msgStatus.edit(`✅ **Limpeza Concluída!**\n> 🧹 Cargos removidos de **${countRemovidos}** membros (ignorando quem estava em call de voz).`);
-        } catch (err) {
-            console.error(err);
+        }
+    }
+    
+    if (interaction.isModalSubmit()) {
+        if (interaction.customId === 'modal_registro') {
+            const rawNome = interaction.fields.getTextInputValue('registro_nome');
+            const rawId = interaction.fields.getTextInputValue('registro_id');
+            const rawGrupoText = interaction.fields.getTextInputValue('registro_grupo');
+            const rawContratante = interaction.fields.getTextInputValue('registro_contratante');
+            
+            // REGRA ATIVA: Corrige Hunters -> Recruta nos dados inseridos
+            const { text: nome } = autoRenameHunters(rawNome);
+            const { text: grupoText } = autoRenameHunters(rawGrupoText);
+            const { text: contratante } = autoRenameHunters(rawContratante);
+            
+            let targetGroup = CONFIG.GRUPOS.find(g => 
+                g.name.toLowerCase().includes(grupoText.toLowerCase()) || 
+                grupoText.toLowerCase().includes(g.name.toLowerCase())
+            );
+            
+            if (!targetGroup) {
+                targetGroup = CONFIG.GRUPOS.find(g => g.name.includes('Recruta')) || CONFIG.GRUPOS[0];
+            }
+            
+            const logsChannel = interaction.guild.channels.cache.get(CONFIG.CANAL_LOGS_ID);
+            if (!logsChannel || !logsChannel.isTextBased()) {
+                return interaction.reply({ content: '❌ Canal de logs de registro não localizado.', ephemeral: true });
+            }
+            
+            const logEmbed = new EmbedBuilder()
+                .setColor('#3498DB')
+                .setTitle('📥 Nova Solicitação de Registro & Apelido')
+                .setDescription('O membro preencheu o formulário de cidadania e aguarda aprovação da Administração.')
+                .addFields(
+                    { name: "👤 Usuário Discord", value: `<@${interaction.user.id}> (${interaction.user.username})`, inline: true },
+                    { name: "🆔 Discord ID", value: `\`${interaction.user.id}\``, inline: true },
+                    { name: "🎯 Grupo Escolhido", value: `🎯 **${targetGroup.name}**\n(Tag: \`${targetGroup.tag}\`)`, inline: false },
+                    { name: "📝 Nome no Jogo", value: `**${nome}**`, inline: true },
+                    { name: "🔢 ID no Jogo", value: `**${rawId}**`, inline: true },
+                    { name: "🤝 Quem te Contratou", value: `**${contratante}**`, inline: false },
+                    { name: "🏷️ Novo Apelido (Após Aprovar)", value: `\`${targetGroup.tag} ${nome} | ${rawId}\``, inline: false }
+                )
+                .setFooter({ text: CONFIG.FOOTER })
+                .setTimestamp();
+                
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`aprovar_btn_${interaction.id}`).setLabel('Aprovar Registro').setStyle(ButtonStyle.Success).setEmoji('✅'),
+                new ButtonBuilder().setCustomId(`recusar_btn_${interaction.id}`).setLabel('Recusar').setStyle(ButtonStyle.Danger).setEmoji('❌')
+            );
+            
+            await logsChannel.send({ embeds: [logEmbed], components: [row] });
+            
+            await interaction.reply({ 
+                content: '🎉 **Seu formulário foi enviado com sucesso!**\nAguarde um administrador avaliar a sua solicitação.', 
+                ephemeral: true 
+            });
         }
     }
 });
 
-// Inicializar Bot
 client.login(TOKEN);
