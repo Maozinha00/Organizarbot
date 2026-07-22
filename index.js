@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * BOT AUTOMÁTICO DE REGISTRO E REGRAS DISCORD — CLÃ HUNTERS, FIVEZ & LUMENFALL
+ * BOT AUTOMÁTICO DE REGISTRO E REGRAS DISCORD — CLÃ HUNTERS & FIVEZ
  * ============================================================================
  * 
  * REGRAS ATIVAS:
@@ -9,7 +9,7 @@
  *    automaticamente no PV (DM) ou no canal de regras (1522910276268069025) as regras
  *    oficiais do Clã Hunters e EXIGE a confirmação do jogador via botão interativo.
  * 
- * 2. SUBSTUIÇÃO AUTOMÁTICA DE APELIDO (Hunters ➔ Recruta):
+ * 2. SUBSTITUIÇÃO AUTOMÁTICA DE APELIDO (Hunters ➔ Recruta):
  *    Modifica automaticamente qualquer apelido/nome com "Hunters" para "Recruta".
  * 
  * 3. PAINEL DE REGISTRO & CIDADANIA:
@@ -22,10 +22,9 @@
  * ============================================================================
  */
 
-import dotenv from 'dotenv';
-dotenv.config();
+require('dotenv').config();
 
-import {
+const {
     Client,
     GatewayIntentBits,
     Partials,
@@ -38,7 +37,7 @@ import {
     TextInputStyle,
     Events,
     PermissionsBitField
-} from "discord.js";
+} = require("discord.js");
 
 // Token do Bot (Definido em .env como DISCORD_TOKEN ou TOKEN)
 const TOKEN = process.env.DISCORD_TOKEN || process.env.TOKEN;
@@ -103,7 +102,7 @@ const client = new Client({
 });
 
 // ============================================================================
-// FUNÇÃO AUXILIAR: REGRA DE CORREÇÃO AUTOMÁTICA DE APELIDO
+// FUNÇÃO AUXILIAR: REGRA DE CORREÇÃO AUTOMÁTICA DE APELIDO (Hunters -> Recruta)
 // ============================================================================
 function autoRenameHunters(text) {
     if (!text) return { text: '', changed: false };
@@ -182,7 +181,7 @@ Olá <@${member.id}>! Você recebeu o cargo do **Clã Hunters**. Para participar
 
 🚫 **07 • TOLERÂNCIA ZERO**
 ⛔ Cheat | Hack | Macro | Exploit | Roubo interno | Compartilhar informações | Retirar itens sem autorização.
-> **Infracões resultam em expulsão imediata.**
+> **Infrações resultam em expulsão imediata.**
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -208,7 +207,7 @@ Olá <@${member.id}>! Você recebeu o cargo do **Clã Hunters**. Para participar
         // Tenta enviar via DM primeiro
         try {
             await member.send({ embeds: [rulesEmbed], components: [row] });
-            console.log(`[REGRAS HUNTERS] DM de regras enviada para @${member.user.username}`);
+            console.log(`[REGRAS HUNTERS] DM enviada para @${member.user.username}`);
         } catch (dmErr) {
             // Se DM estiver fechada, envia no canal oficial de regras marcando o usuário
             const rulesChannel = member.guild.channels.cache.get(CONFIG.CANAL_REGRAS_HUNTERS_ID);
@@ -218,7 +217,7 @@ Olá <@${member.id}>! Você recebeu o cargo do **Clã Hunters**. Para participar
                     embeds: [rulesEmbed],
                     components: [row]
                 });
-                console.log(`[REGRAS HUNTERS] Regras enviadas no canal de regras para @${member.user.username}`);
+                console.log(`[REGRAS HUNTERS] Regras enviadas no canal para @${member.user.username}`);
             }
         }
     } catch (err) {
@@ -256,8 +255,8 @@ async function checkAndRenameMember(member) {
                     .setTitle('🛡️ Correção de Apelido Aplicada')
                     .setDescription(`Apelido alterado para cumprir a regra **Hunters ➔ Recruta**.`)
                     .addFields(
-                        { name: '👤 Member', value: `<@${member.id}> (${currentUsername})`, inline: true },
-                        { name: '📝 Apelido Corrigido', value: ``${newNickname}``, inline: true }
+                        { name: '👤 Membro', value: `<@${member.id}> (${currentUsername})`, inline: true },
+                        { name: '📝 Apelido Corrigido', value: `\`${newNickname}\``, inline: true }
                     )
                     .setFooter({ text: CONFIG.FOOTER })
                     .setTimestamp();
@@ -329,19 +328,16 @@ Por favor, realize seu registro no canal <#${CONFIG.CANAL_REGISTRO_ID}> para obt
 });
 
 // ============================================================================
-// EVENTO: MONITORAMENTO DE CARGOS E APELIDO (Garante o envio das Regras ao ganhar cargo Hunters)
+// EVENTO: MONITORAMENTO DE CARGOS (Dispara Regras ao receber cargo Hunters)
 // ============================================================================
 client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
-    // 1. Verificação de Apelido
     if (oldMember.nickname !== newMember.nickname) {
         await checkAndRenameMember(newMember);
     }
 
-    // 2. Verificação de Cargo Hunters
     const hadHuntersRole = oldMember.roles.cache.has(CONFIG.CARGO_HUNTERS_RECRUTA_ID);
     const hasHuntersRole = newMember.roles.cache.has(CONFIG.CARGO_HUNTERS_RECRUTA_ID);
 
-    // Se acabou de ganhar o cargo do Clã Hunters, dispara a leitura obrigatória de regras
     if (!hadHuntersRole && hasHuntersRole) {
         console.log(`[ROLE TRIGGER] Membro @${newMember.user.username} recebeu o cargo do Clã Hunters!`);
         await sendHuntersMandatoryRules(newMember);
@@ -349,7 +345,7 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
 });
 
 // ============================================================================
-// EVENTO: MONITORAMENTO DE COMANDOS (!limparcargos, !postarregras, !painel)
+// EVENTO: COMANDOS (!limparcargos, !postarregras, !painel)
 // ============================================================================
 client.on(Events.MessageCreate, async (message) => {
     if (message.author.bot || !message.guild) return;
@@ -512,19 +508,15 @@ client.on(Events.MessageCreate, async (message) => {
 });
 
 // ============================================================================
-// EVENTO: INTEGRAÇÃO DE BOTAO E MODAIS
+// EVENTO: BOTÕES E MODAIS
 // ============================================================================
 client.on(Events.InteractionCreate, async (interaction) => {
     // 1. Confirmação do Leitura de Regras do Clã Hunters
     if (interaction.isButton() && interaction.customId === 'aceitar_regras_hunters') {
-        const member = interaction.member;
-        
         const confirmEmbed = new EmbedBuilder()
             .setColor('#2ECC71')
             .setTitle('✅ TERMO DE ACEITE CONCLUÍDO!')
-            .setDescription(`Obrigado <@${interaction.user.id}>! Você confirmou a leitura e o compromisso com as **Regras Oficiais do Clã Hunters**.
-
-🔥 **Lembre-se:** Disciplina, Lealdade, União e Respeito acima de tudo.`)
+            .setDescription(`Obrigado <@${interaction.user.id}>! Você confirmou a leitura e o compromisso com as **Regras Oficiais do Clã Hunters**.\n\n🔥 **Lembre-se:** Disciplina, Lealdade, União e Respeito acima de tudo.`)
             .setFooter({ text: CONFIG.FOOTER })
             .setTimestamp();
 
@@ -539,7 +531,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 .setDescription(`O membro aceitou formalmente as regras do Clã Hunters.`)
                 .addFields(
                     { name: '👤 Jogador', value: `<@${interaction.user.id}> (${interaction.user.username})`, inline: true },
-                    { name: '🆔 ID Discord', value: ``${interaction.user.id}``, inline: true },
+                    { name: '🆔 ID Discord', value: `\`${interaction.user.id}\``, inline: true },
                     { name: 'STATUS', value: '🟢 **Regras Lidas e Aceitas**', inline: false }
                 )
                 .setFooter({ text: CONFIG.FOOTER })
@@ -695,7 +687,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             .setDescription('O membro preencheu o formulário de cidadania e aguarda aprovação da Administração.')
             .addFields(
                 { name: "👤 Usuário Discord", value: `<@${interaction.user.id}> (${interaction.user.username})`, inline: true },
-                { name: "🆔 Discord ID", value: ``${interaction.user.id}``, inline: true },
+                { name: "🆔 Discord ID", value: `\`${interaction.user.id}\``, inline: true },
                 { name: "🎯 Grupo Escolhido", value: `🎯 **${targetGroup.name}**\n(Tag: \`${targetGroup.tag}\`)`, inline: false },
                 { name: "📝 Nome no Jogo", value: `**${nome}**`, inline: true },
                 { name: "🔢 ID no Jogo", value: `**${rawId}**`, inline: true },
