@@ -1,13 +1,16 @@
 {
-  "name": "familia-souza-bot",
+  "name": "bot-cla-hunters",
   "version": "1.0.0",
-  "type": "module",
+  "description": "Bot oficial do Clã Hunters & FiveZ",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "discord.js": "^14.16.3",
-    "dotenv": "^16.4.7"
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
